@@ -1,9 +1,15 @@
-const MIN_SIZE = 1
-const MAX_SIZE = 20
+export const MIN_FLOOR_SIZE = 1
+export const MAX_FLOOR_SIZE = 20
 
 function validateSize(size, name) {
-  if (!Number.isInteger(size) || size < MIN_SIZE || size > MAX_SIZE) {
-    throw new RangeError(`${name} must be an integer between 1 and ${MAX_SIZE}`)
+  if (
+    !Number.isInteger(size) ||
+    size < MIN_FLOOR_SIZE ||
+    size > MAX_FLOOR_SIZE
+  ) {
+    throw new RangeError(
+      `${name} must be an integer between ${MIN_FLOOR_SIZE} and ${MAX_FLOOR_SIZE}`,
+    )
   }
 }
 

@@ -1,0 +1,3 @@
+# Create a 4 by 3 floor, then report the (currently empty) robot list.
+FLOOR 4,3
+REPORT

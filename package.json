@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "scenario": "node scripts/scenario.js",
     "test:engine": "node --test"
   },
   "dependencies": {
