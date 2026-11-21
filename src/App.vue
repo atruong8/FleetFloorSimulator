@@ -4,6 +4,7 @@ import {
   MAX_FLOOR_SIZE,
   MIN_FLOOR_SIZE,
 } from '../engine/floor.js'
+import { placeRobot } from '../engine/world.js'
 
 export default {
   data() {
@@ -13,6 +14,8 @@ export default {
       width: initialFloor.width,
       height: initialFloor.height,
       floor: initialFloor,
+      robots: [],
+      selectedRobotId: null,
       errorMessage: '',
       minFloorSize: MIN_FLOOR_SIZE,
       maxFloorSize: MAX_FLOOR_SIZE,
@@ -24,7 +27,14 @@ export default {
 
       for (let y = this.floor.height - 1; y >= 0; y -= 1) {
         for (let x = 0; x < this.floor.width; x += 1) {
-          positions.push({ x, y })
+          positions.push({
+            x,
+            y,
+            robot: this.robots.find(
+              (robot) =>
+                robot.position.x === x && robot.position.y === y,
+            ),
+          })
         }
       }
 
@@ -46,6 +56,37 @@ export default {
       }
 
       this.floor = createFloor(this.width, this.height)
+      this.robots = []
+      this.selectedRobotId = null
+    },
+    handleCellClick(cell) {
+      this.errorMessage = ''
+
+      if (cell.robot) {
+        this.selectedRobotId = cell.robot.id
+        return
+      }
+
+      try {
+        const result = placeRobot(this.floor, this.robots, cell)
+        this.robots = result.robots
+        this.selectedRobotId = result.robot.id
+      } catch (error) {
+        this.errorMessage = error.message
+      }
+    },
+    facingArrow(facing) {
+      if (facing === 'NORTH') {
+        return '↑'
+      } else if (facing === 'EAST') {
+        return '→'
+      } else if (facing === 'SOUTH') {
+        return '↓'
+      } else if (facing === 'WEST') {
+        return '←'
+      }
+
+      return ''
     },
   },
 }
@@ -119,13 +160,30 @@ export default {
               role="grid"
               :aria-label="`${floor.width} by ${floor.height} floor grid`"
             >
-              <div
+              <button
                 v-for="cell in createCells"
                 :key="`${cell.x},${cell.y}`"
                 class="floor-cell"
+                :class="{
+                  'has-robot': cell.robot,
+                  selected: cell.robot?.id === selectedRobotId,
+                }"
                 role="gridcell"
-                :aria-label="`Cell ${cell.x}, ${cell.y}`"
-              />
+                :aria-label="
+                  cell.robot
+                    ? `${cell.robot.id} at ${cell.x}, ${cell.y}, facing ${cell.robot.facing}. Click to select.`
+                    : `Place robot at ${cell.x}, ${cell.y}`
+                "
+                :aria-pressed="cell.robot?.id === selectedRobotId"
+                @click="handleCellClick(cell)"
+              >
+                <template v-if="cell.robot">
+                  <span>{{ cell.robot.id }}</span>
+                  <span class="robot-facing" aria-hidden="true">
+                    {{ facingArrow(cell.robot.facing) }}
+                  </span>
+                </template>
+              </button>
             </div>
 
             <div
@@ -142,6 +200,9 @@ export default {
       </div>
 
       <p class="origin-note">Coordinates start at (0, 0) in the bottom-left.</p>
+      <p v-if="selectedRobotId" class="selection-note" role="status">
+        Selected robot: {{ selectedRobotId }}
+      </p>
     </section>
   </main>
 </template>
@@ -328,9 +389,37 @@ button:hover {
 }
 
 .floor-cell {
+  display: flex;
+  min-height: 0;
   width: 2rem;
   height: 2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 0;
+  border-radius: 0;
   background: #fff;
+  color: #172033;
+  font-size: 0.55rem;
+  line-height: 1;
+}
+
+.floor-cell:hover {
+  background: #eef1ff;
+}
+
+.floor-cell.has-robot {
+  background: #dce5ff;
+  color: #263b91;
+  font-weight: 700;
+}
+
+.floor-cell.selected {
+  box-shadow: inset 0 0 0 2px #4355b5;
+}
+
+.robot-facing {
+  font-size: 0.8rem;
 }
 
 .x-axis {
@@ -339,5 +428,11 @@ button:hover {
 
 .origin-note {
   margin-top: 0.75rem;
+}
+
+.selection-note {
+  margin: 0.5rem 0 0;
+  color: #344594;
+  font-weight: 650;
 }
 </style>
