@@ -4,7 +4,11 @@ import {
   MAX_FLOOR_SIZE,
   MIN_FLOOR_SIZE,
 } from '../engine/floor.js'
-import { placeRobot, queueRobotCommand } from '../engine/world.js'
+import {
+  advanceTick,
+  placeRobot,
+  queueRobotCommand,
+} from '../engine/world.js'
 
 export default {
   data() {
@@ -19,6 +23,11 @@ export default {
       errorMessage: '',
       minFloorSize: MIN_FLOOR_SIZE,
       maxFloorSize: MAX_FLOOR_SIZE,
+      tickCount: 0,
+      tickHistory: [],
+      tickIntervalMs: 500,
+      isPlaying: false,
+      playbackTimer: null,
     }
   },
   mounted() {
@@ -26,6 +35,18 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener('keydown', this.handleKeydown)
+    this.pauseSimulation()
+  },
+
+  // If the simulation is playing, it pauses and starts again so the next tick uses the new interval.
+  // If the simulation is paused, it does nothing; the new interval will apply when you press Play.
+  watch: {
+    tickIntervalMs() {
+      if (this.isPlaying) {
+        this.pauseSimulation()
+        this.playSimulation()
+      }
+    },
   },
   computed: {
     selectedRobot() {
@@ -67,6 +88,9 @@ export default {
       this.floor = createFloor(this.width, this.height)
       this.robots = []
       this.selectedRobotId = null
+      this.pauseSimulation()
+      this.tickCount = 0
+      this.tickHistory = []
     },
     handleCellClick(cell) {
       this.errorMessage = ''
@@ -94,6 +118,66 @@ export default {
         this.selectedRobotId,
         command,
       )
+    },
+    stepSimulation() {
+      const { robots, results } = advanceTick(this.floor, this.robots)
+      this.robots = robots
+      this.tickCount += 1
+      this.tickHistory.unshift({
+        number: this.tickCount,
+        results,
+      })
+    },
+    playSimulation() {
+      if (this.isPlaying) {
+        return
+      }
+
+      this.isPlaying = true
+      this.scheduleNextTick()
+    },
+    pauseSimulation() {
+      this.isPlaying = false
+      if (this.playbackTimer !== null) {
+        clearTimeout(this.playbackTimer)
+        this.playbackTimer = null
+      }
+    },
+    scheduleNextTick() {
+      if (!this.isPlaying) {
+        return
+      }
+
+      this.playbackTimer = setTimeout(() => {
+        this.playbackTimer = null
+        if (!this.isPlaying) {
+          return
+        }
+
+        this.stepSimulation()
+        this.scheduleNextTick()
+      }, this.tickIntervalMs)
+    },
+    togglePlayback() {
+      if (this.isPlaying) {
+        this.pauseSimulation()
+      } else {
+        this.playSimulation()
+      }
+    },
+    describeTickResult(result) {
+      if (result.action === 'idle') {
+        return `${result.robotId}: idle`
+      }
+      if (result.action === 'turned') {
+        return `${result.robotId}: turned ${result.command}, now facing ${result.facing}`
+      }
+      if (result.action === 'moved') {
+        return `${result.robotId}: moved to (${result.to.x}, ${result.to.y})`
+      }
+
+      const blockedBy = result.blockedBy ? ` by ${result.blockedBy}` : ''
+      return `${result.robotId}: blocked (${result.reason}${blockedBy})`
     },
     handleKeydown(event) {
       const target = event.target
@@ -286,6 +370,52 @@ export default {
       </p>
     </section>
 
+    <section class="panel" aria-labelledby="ticks-heading">
+      <h2 id="ticks-heading">Simulation ticks</h2>
+      <div class="tick-controls">
+        <button
+          type="button"
+          :disabled="isPlaying"
+          @click="stepSimulation"
+        >
+          Step
+        </button>
+        <button type="button" @click="togglePlayback">
+          {{ isPlaying ? 'Pause' : 'Play' }}
+        </button>
+        <label class="interval-field">
+          <span>Tick interval (ms)</span>
+          <input
+            v-model.number="tickIntervalMs"
+            type="range"
+            min="100"
+            max="5000"
+            step="100"
+          />
+          <output>{{ tickIntervalMs }} ms</output>
+        </label>
+      </div>
+      <p class="tick-count" role="status">Current tick: {{ tickCount }}</p>
+
+      <div v-if="tickHistory.length" class="tick-history">
+        <h3>Tick results</h3>
+        <ol class="tick-list">
+          <li v-for="tick in tickHistory" :key="tick.number">
+            <h4>Tick {{ tick.number }}</h4>
+            <ul v-if="tick.results.length">
+              <li v-for="result in tick.results" :key="result.robotId">
+                {{ describeTickResult(result) }}
+              </li>
+            </ul>
+            <p v-else>No robots to act.</p>
+          </li>
+        </ol>
+      </div>
+      <p v-else class="commands-description">
+        Step the simulation to process the first queued command for each robot.
+      </p>
+    </section>
+
     <section class="panel" aria-labelledby="robots-heading">
       <h2 id="robots-heading">Robots and pending queues</h2>
       <p v-if="robots.length === 0" class="commands-description">
@@ -419,6 +549,19 @@ input {
   border: 1px solid #cbd3df;
   border-radius: 0.4rem;
   color: #172033;
+}
+
+.interval-field {
+  display: grid;
+  gap: 0.4rem;
+  color: #465166;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.interval-field input {
+  width: min(14rem, 55vw);
+  accent-color: #4355b5;
 }
 
 .dimension-field input:focus-visible,
@@ -562,6 +705,57 @@ button:hover {
   flex-wrap: wrap;
   gap: 0.6rem;
   margin-top: 1rem;
+}
+
+.tick-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.tick-count {
+  margin: 0.9rem 0 0;
+  color: #344594;
+  font-weight: 650;
+}
+
+.tick-history {
+  margin-top: 1.25rem;
+}
+
+.tick-history h3,
+.tick-history h4 {
+  margin: 0;
+}
+
+.tick-list {
+  display: grid;
+  gap: 0.75rem;
+  max-height: 20rem;
+  overflow: auto;
+  margin: 0.75rem 0 0;
+  padding-left: 1.5rem;
+}
+
+.tick-list > li {
+  padding: 0.65rem;
+  border: 1px solid #dfe4ec;
+  border-radius: 0.4rem;
+}
+
+.tick-list ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  color: #465166;
+}
+
+.tick-list p {
+  margin: 0.5rem 0 0;
+  color: #667085;
 }
 
 .command-buttons button:disabled {

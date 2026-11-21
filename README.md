@@ -29,5 +29,10 @@ Expected output:
 EMPTY
 ```
 
-The remaining scenario commands and the simulation engine will be added
-incrementally.
+The UI currently supports creating a floor, placing and selecting robots,
+queueing `MOVE`, `LEFT`, and `RIGHT`, and stepping or playing the simulation.
+The tick engine resolves simultaneous movement and records tick results in
+memory for the current page session.
+
+The scenario runner does not yet support robot commands or ticks. Persistence
+and saving tick history are also not implemented yet.
