@@ -1,30 +1,37 @@
 <script>
 import {
-  createFloor,
+  createFloor as makeInitialFloor,
   MAX_FLOOR_SIZE,
   MIN_FLOOR_SIZE,
 } from '../engine/floor.js'
 import {
-  advanceTick,
-  placeRobot,
-  queueRobotCommand,
-} from '../engine/world.js'
+  advanceWorldTick,
+  createFloor,
+  getWorld,
+  placeWorldRobot,
+  queueWorldCommand,
+  toggleWorldObstacle,
+} from './services/worldApi.js'
 
 export default {
   data() {
-    const initialFloor = createFloor()
+    const initialFloor = makeInitialFloor()
 
     return {
       width: initialFloor.width,
       height: initialFloor.height,
       floor: initialFloor,
       robots: [],
+      history: [],
       selectedRobotId: null,
+      obstacleMode: false,
       errorMessage: '',
+      isLoading: true,
+      isReady: false,
+      isSaving: false,
       minFloorSize: MIN_FLOOR_SIZE,
       maxFloorSize: MAX_FLOOR_SIZE,
       tickCount: 0,
-      tickHistory: [],
       tickIntervalMs: 500,
       isPlaying: false,
       playbackTimer: null,
@@ -32,6 +39,7 @@ export default {
   },
   mounted() {
     window.addEventListener('keydown', this.handleKeydown)
+    this.loadWorld()
   },
   beforeUnmount() {
     window.removeEventListener('keydown', this.handleKeydown)
@@ -52,6 +60,16 @@ export default {
     selectedRobot() {
       return this.robots.find((robot) => robot.id === this.selectedRobotId)
     },
+    tickHistory() {
+      return this.history
+        .filter((entry) => entry.type === 'tick.completed')
+        .map((entry) => ({
+          id: entry.id,
+          number: entry.tick,
+          results: entry.payload.results,
+        }))
+        .reverse()
+    },
     createCells() {
       const positions = []
 
@@ -64,6 +82,9 @@ export default {
               (robot) =>
                 robot.position.x === x && robot.position.y === y,
             ),
+            obstacle: this.floor.obstacles.some(
+              (obstacle) => obstacle.x === x && obstacle.y === y,
+            ),
           })
         }
       }
@@ -72,6 +93,52 @@ export default {
     },
   },
   methods: {
+    applyWorld(world) {
+      this.floor = world.floor
+      this.width = world.floor.width
+      this.height = world.floor.height
+      this.robots = world.robots
+      this.tickCount = world.tickCount
+      this.history = world.history
+
+      if (!this.robots.some((robot) => robot.id === this.selectedRobotId)) {
+        this.selectedRobotId = null
+      }
+    },
+    async loadWorld() {
+      this.isLoading = true
+      this.errorMessage = ''
+
+      try {
+        this.applyWorld(await getWorld())
+        this.isReady = true
+      } catch (error) {
+        this.errorMessage = error.message
+      } finally {
+        this.isLoading = false
+      }
+    },
+    async saveWorldChange(change) {
+      if (!this.isReady || this.isSaving) {
+        return false
+      }
+
+      this.errorMessage = ''
+      this.isSaving = true
+
+      try {
+        this.applyWorld(await change())
+        return true
+      } catch (error) {
+        this.errorMessage = error.message
+        if (this.isPlaying) {
+          this.pauseSimulation()
+        }
+        return false
+      } finally {
+        this.isSaving = false
+      }
+    },
     createFloorFromInputs() {
       this.errorMessage = ''
 
@@ -85,48 +152,48 @@ export default {
         return
       }
 
-      this.floor = createFloor(this.width, this.height)
-      this.robots = []
-      this.selectedRobotId = null
       this.pauseSimulation()
-      this.tickCount = 0
-      this.tickHistory = []
+      return this.saveWorldChange(() => createFloor(this.width, this.height))
     },
-    handleCellClick(cell) {
+    async handleCellClick(cell) {
       this.errorMessage = ''
+
+      if (this.obstacleMode) {
+        if (cell.robot) {
+          this.errorMessage = 'Cannot place an obstacle under a robot.'
+          return
+        }
+
+        await this.saveWorldChange(() => toggleWorldObstacle(cell))
+        return
+      }
+
+      if (cell.obstacle) {
+        this.errorMessage = 'Enable obstacle edit mode to remove this obstacle.'
+        return
+      }
 
       if (cell.robot) {
         this.selectedRobotId = cell.robot.id
         return
       }
 
-      try {
-        const result = placeRobot(this.floor, this.robots, cell)
-        this.robots = result.robots
-        this.selectedRobotId = result.robot.id
-      } catch (error) {
-        this.errorMessage = error.message
+      const saved = await this.saveWorldChange(() => placeWorldRobot(cell))
+      if (saved) {
+        this.selectedRobotId = this.robots[this.robots.length - 1]?.id ?? null
       }
     },
     queueCommand(command) {
-      if (!this.selectedRobotId) {
+      if (!this.selectedRobotId || !this.isReady || this.isSaving) {
         return
       }
 
-      this.robots = queueRobotCommand(
-        this.robots,
-        this.selectedRobotId,
-        command,
+      return this.saveWorldChange(() =>
+        queueWorldCommand(this.selectedRobotId, command),
       )
     },
     stepSimulation() {
-      const { robots, results } = advanceTick(this.floor, this.robots)
-      this.robots = robots
-      this.tickCount += 1
-      this.tickHistory.unshift({
-        number: this.tickCount,
-        results,
-      })
+      return this.saveWorldChange(advanceWorldTick)
     },
     playSimulation() {
       if (this.isPlaying) {
@@ -154,8 +221,13 @@ export default {
           return
         }
 
-        this.stepSimulation()
-        this.scheduleNextTick()
+        this.stepSimulation().then((saved) => {
+          if (saved) {
+            this.scheduleNextTick()
+          } else {
+            this.pauseSimulation()
+          }
+        })
       }, this.tickIntervalMs)
     },
     togglePlayback() {
@@ -179,6 +251,29 @@ export default {
       const blockedBy = result.blockedBy ? ` by ${result.blockedBy}` : ''
       return `${result.robotId}: blocked (${result.reason}${blockedBy})`
     },
+    describeHistoryEntry(entry) {
+      const { payload } = entry
+
+      if (entry.type === 'floor.created') {
+        return `Created a ${payload.width} × ${payload.height} floor.`
+      }
+      if (entry.type === 'robot.placed') {
+        return `${payload.robotId} placed at (${payload.position.x}, ${payload.position.y}).`
+      }
+      if (entry.type === 'robot.command_queued') {
+        return `${payload.command} queued for ${payload.robotId}.`
+      }
+      if (entry.type === 'obstacle.toggled') {
+        const change = payload.isObstacle ? 'added' : 'removed'
+        return `Obstacle ${change} at (${payload.position.x}, ${payload.position.y}).`
+      }
+
+      const results = payload.results
+      const details = results.length
+        ? results.map((result) => this.describeTickResult(result)).join('; ')
+        : 'No robots to act.'
+      return `Tick ${entry.tick}: ${details}`
+    },
     handleKeydown(event) {
       const target = event.target
       if (
@@ -196,7 +291,12 @@ export default {
       }
       const command = commandsByKey[event.key]
 
-      if (!command || !this.selectedRobotId) {
+      if (
+        !command ||
+        !this.selectedRobotId ||
+        !this.isReady ||
+        this.isSaving
+      ) {
         return
       }
 
@@ -225,7 +325,8 @@ export default {
     <header class="page-header">
       <p class="eyebrow">Fleet Floor Simulator</p>
       <h1>Create a floor</h1>
-      <p>Choose the grid dimensions to get started.</p>
+      <p class="header-description">Choose the grid dimensions to get started.</p>
+      <p v-if="isLoading" role="status">Loading saved simulation…</p>
     </header>
 
     <section class="panel" aria-labelledby="dimensions-heading">
@@ -240,6 +341,7 @@ export default {
             :max="maxFloorSize"
             step="1"
             required
+            :disabled="!isReady || isSaving"
           />
         </label>
 
@@ -252,15 +354,25 @@ export default {
             :max="maxFloorSize"
             step="1"
             required
+            :disabled="!isReady || isSaving"
           />
         </label>
 
-        <button type="submit">Create floor</button>
+        <button type="submit" :disabled="!isReady || isSaving">
+          Create floor
+        </button>
       </form>
 
       <p v-if="errorMessage" class="error-message" role="alert">
         {{ errorMessage }}
       </p>
+      <button
+        v-if="!isReady && !isLoading"
+        type="button"
+        @click="loadWorld"
+      >
+        Retry connection
+      </button>
     </section>
 
     <section class="panel floor-panel" aria-labelledby="floor-heading">
@@ -294,18 +406,27 @@ export default {
                 class="floor-cell"
                 :class="{
                   'has-robot': cell.robot,
+                  'has-obstacle': cell.obstacle,
                   selected: cell.robot?.id === selectedRobotId,
                 }"
+                :disabled="!isReady || isSaving"
                 role="gridcell"
                 :aria-label="
                   cell.robot
                     ? `${cell.robot.id} at ${cell.x}, ${cell.y}, facing ${cell.robot.facing}. Click to select.`
-                    : `Place robot at ${cell.x}, ${cell.y}`
+                    : cell.obstacle
+                      ? obstacleMode
+                        ? `Remove obstacle at ${cell.x}, ${cell.y}`
+                        : `Obstacle at ${cell.x}, ${cell.y}. Enable obstacle edit mode to remove.`
+                      : obstacleMode
+                        ? `Place obstacle at ${cell.x}, ${cell.y}`
+                        : `Place robot at ${cell.x}, ${cell.y}`
                 "
                 :aria-pressed="cell.robot?.id === selectedRobotId"
                 @click="handleCellClick(cell)"
               >
-                <template v-if="cell.robot">
+                <span v-if="cell.obstacle" aria-hidden="true">■</span>
+                <template v-else-if="cell.robot">
                   <span>{{ cell.robot.id }}</span>
                   <span class="robot-facing" aria-hidden="true">
                     {{ facingArrow(cell.robot.facing) }}
@@ -328,6 +449,14 @@ export default {
       </div>
 
       <p class="origin-note">Coordinates start at (0, 0) in the bottom-left.</p>
+      <label class="obstacle-mode">
+        <input
+          v-model="obstacleMode"
+          type="checkbox"
+          :disabled="!isReady || isSaving"
+        />
+        Edit obstacles by clicking floor cells
+      </label>
       <p v-if="selectedRobotId" class="selection-note" role="status">
         Selected robot: {{ selectedRobotId }}
       </p>
@@ -345,21 +474,21 @@ export default {
       <div class="command-buttons">
         <button
           type="button"
-          :disabled="!selectedRobot"
+          :disabled="!selectedRobot || !isReady || isSaving"
           @click="queueCommand('MOVE')"
         >
           ↑ Move
         </button>
         <button
           type="button"
-          :disabled="!selectedRobot"
+          :disabled="!selectedRobot || !isReady || isSaving"
           @click="queueCommand('LEFT')"
         >
           ← Left
         </button>
         <button
           type="button"
-          :disabled="!selectedRobot"
+          :disabled="!selectedRobot || !isReady || isSaving"
           @click="queueCommand('RIGHT')"
         >
           → Right
@@ -375,12 +504,16 @@ export default {
       <div class="tick-controls">
         <button
           type="button"
-          :disabled="isPlaying"
+          :disabled="isPlaying || !isReady || isSaving"
           @click="stepSimulation"
         >
           Step
         </button>
-        <button type="button" @click="togglePlayback">
+        <button
+          type="button"
+          :disabled="!isReady || isSaving"
+          @click="togglePlayback"
+        >
           {{ isPlaying ? 'Pause' : 'Play' }}
         </button>
         <label class="interval-field">
@@ -391,6 +524,7 @@ export default {
             min="100"
             max="5000"
             step="100"
+            :disabled="!isReady || isSaving"
           />
           <output>{{ tickIntervalMs }} ms</output>
         </label>
@@ -400,7 +534,7 @@ export default {
       <div v-if="tickHistory.length" class="tick-history">
         <h3>Tick results</h3>
         <ol class="tick-list">
-          <li v-for="tick in tickHistory" :key="tick.number">
+          <li v-for="tick in tickHistory" :key="tick.id">
             <h4>Tick {{ tick.number }}</h4>
             <ul v-if="tick.results.length">
               <li v-for="result in tick.results" :key="result.robotId">
@@ -413,6 +547,22 @@ export default {
       </div>
       <p v-else class="commands-description">
         Step the simulation to process the first queued command for each robot.
+      </p>
+    </section>
+
+    <section class="panel" aria-labelledby="history-heading">
+      <h2 id="history-heading">Simulation history</h2>
+      <ol v-if="history.length" class="history-list">
+        <li
+          v-for="entry in history.slice().reverse()"
+          :key="entry.id"
+        >
+          <time :datetime="entry.createdAt">{{ entry.createdAt }}</time>
+          <span>{{ describeHistoryEntry(entry) }}</span>
+        </li>
+      </ol>
+      <p v-else class="commands-description">
+        Changes to the floor and simulation will appear here.
       </p>
     </section>
 
@@ -501,6 +651,7 @@ input {
   font-size: clamp(1.8rem, 5vw, 2.4rem);
 }
 
+.page-header > .header-description,
 .page-header > p:last-child {
   margin-top: 0.5rem;
   color: #596579;
@@ -583,6 +734,11 @@ button {
 
 button:hover {
   background: #344594;
+}
+
+button:disabled {
+  background: #aab2c3;
+  cursor: not-allowed;
 }
 
 .error-message {
@@ -672,6 +828,11 @@ button:hover {
   font-weight: 700;
 }
 
+.floor-cell.has-obstacle {
+  background: #465166;
+  color: #fff;
+}
+
 .floor-cell.selected {
   box-shadow: inset 0 0 0 2px #4355b5;
 }
@@ -686,6 +847,15 @@ button:hover {
 
 .origin-note {
   margin-top: 0.75rem;
+}
+
+.obstacle-mode {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  color: #465166;
+  font-size: 0.9rem;
 }
 
 .selection-note {
@@ -756,6 +926,28 @@ button:hover {
 .tick-list p {
   margin: 0.5rem 0 0;
   color: #667085;
+}
+
+.history-list {
+  display: grid;
+  gap: 0.6rem;
+  max-height: 24rem;
+  overflow: auto;
+  margin: 1rem 0 0;
+  padding-left: 1.5rem;
+}
+
+.history-list li {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.65rem;
+  border: 1px solid #dfe4ec;
+  border-radius: 0.4rem;
+}
+
+.history-list time {
+  color: #667085;
+  font-size: 0.8rem;
 }
 
 .command-buttons button:disabled {

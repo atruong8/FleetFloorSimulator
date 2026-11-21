@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "api:dev": "npm --prefix api run start:dev",
     "build": "vite build",
     "preview": "vite preview",
     "scenario": "node scripts/scenario.js",
-    "test:engine": "node --test"
+    "test:engine": "node --test engine/floor.test.js engine/robot.test.js engine/scenario.test.js engine/world.test.js"
   },
   "dependencies": {
     "vue": "^3.5.0"
