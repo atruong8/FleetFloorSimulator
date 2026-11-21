@@ -4,7 +4,7 @@ import {
   MAX_FLOOR_SIZE,
   MIN_FLOOR_SIZE,
 } from '../engine/floor.js'
-import { placeRobot } from '../engine/world.js'
+import { placeRobot, queueRobotCommand } from '../engine/world.js'
 
 export default {
   data() {
@@ -21,7 +21,16 @@ export default {
       maxFloorSize: MAX_FLOOR_SIZE,
     }
   },
+  mounted() {
+    window.addEventListener('keydown', this.handleKeydown)
+  },
+  beforeUnmount() {
+    window.removeEventListener('keydown', this.handleKeydown)
+  },
   computed: {
+    selectedRobot() {
+      return this.robots.find((robot) => robot.id === this.selectedRobotId)
+    },
     createCells() {
       const positions = []
 
@@ -74,6 +83,41 @@ export default {
       } catch (error) {
         this.errorMessage = error.message
       }
+    },
+    queueCommand(command) {
+      if (!this.selectedRobotId) {
+        return
+      }
+
+      this.robots = queueRobotCommand(
+        this.robots,
+        this.selectedRobotId,
+        command,
+      )
+    },
+    handleKeydown(event) {
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName))
+      ) {
+        return
+      }
+
+      const commandsByKey = {
+        ArrowUp: 'MOVE',
+        ArrowLeft: 'LEFT',
+        ArrowRight: 'RIGHT',
+      }
+      const command = commandsByKey[event.key]
+
+      if (!command || !this.selectedRobotId) {
+        return
+      }
+
+      event.preventDefault()
+      this.queueCommand(command)
     },
     facingArrow(facing) {
       if (facing === 'NORTH') {
@@ -203,6 +247,77 @@ export default {
       <p v-if="selectedRobotId" class="selection-note" role="status">
         Selected robot: {{ selectedRobotId }}
       </p>
+    </section>
+
+    <section class="panel" aria-labelledby="commands-heading">
+      <h2 id="commands-heading">Queue commands</h2>
+      <p v-if="selectedRobot" class="commands-description">
+        Queue commands for {{ selectedRobot.id }}. Use the arrow keys or these
+        buttons: ↑ Move, ← Left, → Right.
+      </p>
+      <p v-else class="commands-description">
+        Select a robot on the floor to queue commands.
+      </p>
+      <div class="command-buttons">
+        <button
+          type="button"
+          :disabled="!selectedRobot"
+          @click="queueCommand('MOVE')"
+        >
+          ↑ Move
+        </button>
+        <button
+          type="button"
+          :disabled="!selectedRobot"
+          @click="queueCommand('LEFT')"
+        >
+          ← Left
+        </button>
+        <button
+          type="button"
+          :disabled="!selectedRobot"
+          @click="queueCommand('RIGHT')"
+        >
+          → Right
+        </button>
+      </div>
+      <p class="keyboard-note">
+        Arrow keys work when focus is outside a text or number field.
+      </p>
+    </section>
+
+    <section class="panel" aria-labelledby="robots-heading">
+      <h2 id="robots-heading">Robots and pending queues</h2>
+      <p v-if="robots.length === 0" class="commands-description">
+        No robots placed yet.
+      </p>
+      <ul v-else class="robot-list">
+        <li
+          v-for="robot in robots"
+          :key="robot.id"
+          class="robot-row"
+          :class="{ 'selected-robot-row': robot.id === selectedRobotId }"
+        >
+          <div>
+            <strong>{{ robot.id }}</strong>
+            <span class="robot-details">
+              ({{ robot.position.x }}, {{ robot.position.y }}) ·
+              {{ robot.facing }}
+            </span>
+          </div>
+          <div class="queue-display">
+            <span class="queue-label">Queue:</span>
+            <span v-if="robot.queue.length === 0" class="empty-queue">
+              Empty
+            </span>
+            <ol v-else class="queue-items" :aria-label="`${robot.id} queue`">
+              <li v-for="(command, index) in robot.queue" :key="index">
+                {{ command }}
+              </li>
+            </ol>
+          </div>
+        </li>
+      </ul>
     </section>
   </main>
 </template>
@@ -434,5 +549,88 @@ button:hover {
   margin: 0.5rem 0 0;
   color: #344594;
   font-weight: 650;
+}
+
+.commands-description,
+.keyboard-note {
+  margin: 0.75rem 0 0;
+  color: #596579;
+}
+
+.command-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.command-buttons button:disabled {
+  background: #aab2c3;
+  cursor: not-allowed;
+}
+
+.keyboard-note {
+  font-size: 0.85rem;
+}
+
+.robot-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.robot-row {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  border: 1px solid #dfe4ec;
+  border-radius: 0.5rem;
+}
+
+.selected-robot-row {
+  border-color: #8391dd;
+  background: #f5f6ff;
+}
+
+.robot-details {
+  margin-left: 0.45rem;
+  color: #596579;
+  font-size: 0.9rem;
+}
+
+.queue-display {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.queue-label {
+  font-weight: 650;
+}
+
+.empty-queue {
+  color: #667085;
+}
+
+.queue-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queue-items li {
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.25rem;
+  background: #e9edff;
+  color: #344594;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
 }
 </style>
