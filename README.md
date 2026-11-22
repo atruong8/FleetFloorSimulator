@@ -64,8 +64,9 @@ a robot stuck behind the loser” scenario is also included:
 npm run scenario -- scenarios/contested-cell-and-robot-stuck-behind-loser.txt
 ```
 
-It reports `R1 1,1,EAST`, `R2 2,1,WEST`, and `R3 3,1,WEST`. `OBSTACLE` and the
-assessment's remaining scenario cases are not implemented yet.
+It reports `R1 1,1,EAST`, `R2 2,1,WEST`, and `R3 3,1,WEST`. All five core
+scenario examples from the assessment are included; module-specific scenario
+commands such as `GOTO` and `CHARGER` are not implemented.
 
 The four-robot rotation example is included as well:
 
@@ -101,3 +102,6 @@ queued commands, obstacle changes, and completed ticks. Starting a new floor
 resets the current world but preserves the event history. Use **Clear history**
 in the UI to delete only history entries; it preserves the current floor,
 robots, queues, and tick count.
+
+Robots start with 100 battery, and successful moves consume one. A robot at
+zero battery cannot move. Chargers are not implemented yet.

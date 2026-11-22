@@ -49,6 +49,7 @@ function placeScenarioRobot(floor, robots, id, position, facing) {
   }
 
   // Repositioning changes location and facing without discarding queued commands.
+  robot.battery = robots[existingRobotIndex].battery
   robot.queue = robots[existingRobotIndex].queue
   return robots.map((existingRobot, index) =>
     index === existingRobotIndex ? robot : existingRobot,

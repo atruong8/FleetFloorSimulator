@@ -7,6 +7,7 @@ export interface Robot {
   id: string
   position: Position
   facing: Facing
+  battery: number
   queue: RobotCommand[]
 }
 

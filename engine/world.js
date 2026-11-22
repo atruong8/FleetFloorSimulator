@@ -133,8 +133,11 @@ function prepareTick(floor, robots) {
     const plan = { robot, destination }
     movePlans.set(robot.id, plan)
 
-    // Walls and obstacles reject a move before robot-to-robot conflicts are checked.
-    if (!isInsideFloor(floor, destination)) {
+    // A move with no battery is blocked before checking its destination.
+    if (robot.battery <= 0) {
+      blockedMoves.set(robot.id, { reason: 'NO_BATTERY' })
+    } else if (!isInsideFloor(floor, destination)) {
+      // Walls and obstacles reject moves before robot-to-robot conflicts are checked.
       blockedMoves.set(robot.id, { reason: 'WALL' })
     } else if (
       floor.obstacles.some(
@@ -329,6 +332,8 @@ function applyMoveOutcomes(
     const nextRobot = robotById.get(robotId)
     // Apply successful destinations only after every move has been resolved.
     nextRobot.position = { ...plan.destination }
+    // Blocked moves never reach this branch, so only successful moves consume battery.
+    nextRobot.battery -= 1
     result.action = 'moved'
   }
 }

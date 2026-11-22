@@ -37,6 +37,10 @@ REPORT`)
       { x: 3, y: 0 },
     ],
   )
+  assert.deepEqual(
+    result.robots.map((robot) => robot.battery),
+    [99, 99, 99],
+  )
 })
 
 test('a head-on swap is blocked and REPORT shows both robots in place', () => {

@@ -308,7 +308,15 @@ export class WorldService implements OnModuleDestroy {
       .prepare('SELECT snapshot_json FROM world_state WHERE id = 1')
       .get() as SnapshotRow
 
-    return JSON.parse(row.snapshot_json) as WorldSnapshot
+    const snapshot = JSON.parse(row.snapshot_json) as WorldSnapshot
+    return {
+      ...snapshot,
+      // Older saved robots predate battery state; treat them as fully charged.
+      robots: snapshot.robots.map((robot) => ({
+        ...robot,
+        battery: robot.battery ?? 100,
+      })),
+    }
   }
 
   private recordChange(

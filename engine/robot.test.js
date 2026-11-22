@@ -8,6 +8,7 @@ test('createRobot initializes a robot facing north with an empty queue', () => {
     id: 'R1',
     position: { x: 0, y: 0 },
     facing: 'NORTH',
+    battery: 100,
     queue: [],
   })
 })
@@ -17,6 +18,7 @@ test('createRobot normalizes ID and facing to uppercase', () => {
     id: 'R2',
     position: { x: 1, y: 3 },
     facing: 'WEST',
+    battery: 100,
     queue: [],
   })
 })

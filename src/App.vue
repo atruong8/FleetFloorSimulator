@@ -612,7 +612,7 @@ export default {
             <strong>{{ robot.id }}</strong>
             <span class="robot-details">
               ({{ robot.position.x }}, {{ robot.position.y }}) ·
-              {{ robot.facing }}
+              {{ robot.facing }} · Battery: {{ robot.battery }}
             </span>
           </div>
           <div class="queue-display">

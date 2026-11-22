@@ -23,6 +23,7 @@ export function createRobot(id, position, facing = 'NORTH') {
     id: id.toUpperCase(),
     position: { x: position.x, y: position.y },
     facing: facing.toUpperCase(),
+    battery: 100,
     queue: [],
   }
 }

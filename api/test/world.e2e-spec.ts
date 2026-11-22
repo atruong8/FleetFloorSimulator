@@ -68,6 +68,7 @@ describe('World API persistence (e2e)', () => {
 
     expect(tickResponse.body.tickCount).toBe(1)
     expect(tickResponse.body.robots[0].position).toEqual({ x: 1, y: 2 })
+    expect(tickResponse.body.robots[0].battery).toBe(99)
     expect(tickResponse.body.robots[0].queue).toEqual([])
     expect(tickResponse.body.history.map((entry) => entry.type)).toEqual([
       'floor.created',
@@ -161,6 +162,7 @@ describe('World API persistence (e2e)', () => {
         id: 'R1',
         position: { x: 1, y: 1 },
         facing: 'EAST',
+        battery: 100,
         queue: ['LEFT'],
       },
     ])
