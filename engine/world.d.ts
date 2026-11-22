@@ -22,6 +22,7 @@ export interface TickResult {
   facing?: Facing
   reason?: string
   blockedBy?: string
+  battery?: number
 }
 
 export declare function placeRobot(

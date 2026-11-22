@@ -52,6 +52,11 @@ export class WorldController {
     return this.worldService.toggleObstacle(body)
   }
 
+  @Post('chargers')
+  toggleCharger(@Body() body?: PositionBody) {
+    return this.worldService.toggleCharger(body)
+  }
+
   @Post('tick')
   advanceTick() {
     return this.worldService.advanceTick()

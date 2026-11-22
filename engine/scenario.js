@@ -81,6 +81,23 @@ function addScenarioObstacle(floor, robots, position) {
   }
 }
 
+// Add a charger to any in-bounds cell; chargers do not block robots.
+function addScenarioCharger(floor, position) {
+  const alreadyHasCharger = floor.chargers.some(
+    (charger) =>
+      charger.x === position.x && charger.y === position.y,
+  )
+
+  if (!isInsideFloor(floor, position) || alreadyHasCharger) {
+    return floor
+  }
+
+  return {
+    ...floor,
+    chargers: [...floor.chargers, { ...position }],
+  }
+}
+
 // Validate the full command list first so an invalid line cannot queue only part of it.
 function queueScenarioCommands(robots, id, commands) {
   const normalizedCommands = commands.map((command) => command.toUpperCase())
@@ -178,6 +195,16 @@ export function runScenario(input) {
       floor = addScenarioObstacle(floor, robots, {
         x: Number(obstacleCommand[1]),
         y: Number(obstacleCommand[2]),
+      })
+      continue
+    }
+
+    // CHARGER marks an in-bounds cell without affecting robot movement.
+    const chargerCommand = line.match(/^CHARGER\s+(\d+)\s*,\s*(\d+)$/i)
+    if (chargerCommand) {
+      floor = addScenarioCharger(floor, {
+        x: Number(chargerCommand[1]),
+        y: Number(chargerCommand[2]),
       })
       continue
     }

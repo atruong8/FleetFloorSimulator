@@ -10,6 +10,7 @@ test('FLOOR creates the requested floor and REPORT prints EMPTY', () => {
     width: 4,
     height: 3,
     obstacles: [],
+    chargers: [],
   })
   assert.deepEqual(result.reports, ['EMPTY'])
 })
@@ -137,6 +138,30 @@ REPORT BATTERY`)
   assert.deepEqual(result.robots[0].queue, [])
 })
 
+test('CHARGER allows movement through its cell and recharges robots at tick end', () => {
+  const result = runScenario(`FLOOR 3,1
+CHARGER 1,0
+PLACE R1 0,0,EAST
+QUEUE R1 MOVE MOVE
+TICK 2
+REPORT
+REPORT BATTERY`)
+
+  assert.deepEqual(result.floor.chargers, [{ x: 1, y: 0 }])
+  assert.deepEqual(result.reports, ['R1 2,0,EAST', 'R1 99'])
+  assert.deepEqual(result.robots[0].position, { x: 2, y: 0 })
+  assert.equal(result.robots[0].battery, 99)
+})
+
+test('CHARGER ignores duplicate and out-of-bounds coordinates', () => {
+  const result = runScenario(`FLOOR 2,1
+CHARGER 0,0
+CHARGER 0,0
+CHARGER 2,0`)
+
+  assert.deepEqual(result.floor.chargers, [{ x: 0, y: 0 }])
+})
+
 test('scenario defaults to a 5 by 5 floor and ignores blank and comment lines', () => {
   const result = runScenario('\n# default floor\n\nreport\n')
 
@@ -144,6 +169,7 @@ test('scenario defaults to a 5 by 5 floor and ignores blank and comment lines', 
     width: 5,
     height: 5,
     obstacles: [],
+    chargers: [],
   })
   assert.deepEqual(result.reports, ['EMPTY'])
 })
@@ -155,6 +181,7 @@ test('scenario defaults when it has no valid FLOOR command', () => {
     width: 5,
     height: 5,
     obstacles: [],
+    chargers: [],
   })
   assert.deepEqual(result.reports, [])
 })
@@ -166,6 +193,7 @@ test('scenario commands are case-insensitive and invalid floor sizes are ignored
     width: 2,
     height: 3,
     obstacles: [],
+    chargers: [],
   })
   assert.deepEqual(result.reports, ['EMPTY'])
 })

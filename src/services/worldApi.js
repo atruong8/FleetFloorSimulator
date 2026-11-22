@@ -59,6 +59,10 @@ export function toggleWorldObstacle(position) {
   return requestWorld('/obstacles', { method: 'POST', body: position })
 }
 
+export function toggleWorldCharger(position) {
+  return requestWorld('/chargers', { method: 'POST', body: position })
+}
+
 export function advanceWorldTick() {
   return requestWorld('/tick', { method: 'POST' })
 }

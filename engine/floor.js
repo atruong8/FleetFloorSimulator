@@ -17,7 +17,7 @@ export function createFloor(width = 10, height = 8) {
   validateSize(width, 'width')
   validateSize(height, 'height')
 
-  return { width, height, obstacles: [] }
+  return { width, height, obstacles: [], chargers: [] }
 }
 
 export function isInsideFloor(floor, position) {

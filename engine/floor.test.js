@@ -8,6 +8,7 @@ test('createFloor defaults to a 10 by 8 empty floor', () => {
     width: 10,
     height: 8,
     obstacles: [],
+    chargers: [],
   })
 })
 
@@ -16,6 +17,7 @@ test('createFloor accepts sizes from 1 through 20', () => {
     width: 1,
     height: 20,
     obstacles: [],
+    chargers: [],
   })
 
   for (const size of [0, 21, 1.5, '5']) {

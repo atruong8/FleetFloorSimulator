@@ -11,6 +11,7 @@ import {
   getWorld,
   placeWorldRobot,
   queueWorldCommand,
+  toggleWorldCharger,
   toggleWorldObstacle,
 } from './services/worldApi.js'
 
@@ -26,6 +27,7 @@ export default {
       history: [],
       selectedRobotId: null,
       obstacleMode: false,
+      chargerMode: false,
       errorMessage: '',
       isLoading: true,
       isReady: false,
@@ -85,6 +87,9 @@ export default {
             ),
             obstacle: this.floor.obstacles.some(
               (obstacle) => obstacle.x === x && obstacle.y === y,
+            ),
+            charger: this.floor.chargers.some(
+              (charger) => charger.x === x && charger.y === y,
             ),
           })
         }
@@ -179,6 +184,11 @@ export default {
         return
       }
 
+      if (this.chargerMode) {
+        await this.saveWorldChange(() => toggleWorldCharger(cell))
+        return
+      }
+
       if (cell.obstacle) {
         this.errorMessage = 'Enable obstacle edit mode to remove this obstacle.'
         return
@@ -248,19 +258,59 @@ export default {
         this.playSimulation()
       }
     },
+    toggleObstacleMode() {
+      this.obstacleMode = !this.obstacleMode
+      if (this.obstacleMode) {
+        this.chargerMode = false
+      }
+    },
+    toggleChargerMode() {
+      this.chargerMode = !this.chargerMode
+      if (this.chargerMode) {
+        this.obstacleMode = false
+      }
+    },
+    cellAriaLabel(cell) {
+      const location = `${cell.x}, ${cell.y}`
+
+      if (this.chargerMode) {
+        return `${cell.charger ? 'Remove' : 'Add'} charger at ${location}`
+      }
+
+      if (this.obstacleMode) {
+        if (cell.robot) {
+          return `${cell.robot.id} at ${location}. Cannot place an obstacle under a robot.`
+        }
+        return `${cell.obstacle ? 'Remove' : 'Add'} obstacle at ${location}`
+      }
+
+      if (cell.robot) {
+        return `${cell.robot.id} at ${location}, facing ${cell.robot.facing}. Click to select.`
+      }
+      if (cell.obstacle) {
+        return `Obstacle at ${location}. Enable obstacle edit mode to remove.`
+      }
+      return cell.charger
+        ? `Place robot at ${location}, on a charger`
+        : `Place robot at ${location}`
+    },
     describeTickResult(result) {
+      const battery = result.battery === undefined
+        ? ''
+        : ` (battery ${result.battery})`
+
       if (result.action === 'idle') {
-        return `${result.robotId}: idle`
+        return `${result.robotId}: idle${battery}`
       }
       if (result.action === 'turned') {
-        return `${result.robotId}: turned ${result.command}, now facing ${result.facing}`
+        return `${result.robotId}: turned ${result.command}, now facing ${result.facing}${battery}`
       }
       if (result.action === 'moved') {
-        return `${result.robotId}: moved to (${result.to.x}, ${result.to.y})`
+        return `${result.robotId}: moved to (${result.to.x}, ${result.to.y})${battery}`
       }
 
       const blockedBy = result.blockedBy ? ` by ${result.blockedBy}` : ''
-      return `${result.robotId}: blocked (${result.reason}${blockedBy})`
+      return `${result.robotId}: blocked (${result.reason}${blockedBy})${battery}`
     },
     describeHistoryEntry(entry) {
       const { payload } = entry
@@ -277,6 +327,10 @@ export default {
       if (entry.type === 'obstacle.toggled') {
         const change = payload.isObstacle ? 'added' : 'removed'
         return `Obstacle ${change} at (${payload.position.x}, ${payload.position.y}).`
+      }
+      if (entry.type === 'charger.toggled') {
+        const change = payload.isCharger ? 'added' : 'removed'
+        return `Charger ${change} at (${payload.position.x}, ${payload.position.y}).`
       }
 
       const results = payload.results
@@ -418,24 +472,18 @@ export default {
                 :class="{
                   'has-robot': cell.robot,
                   'has-obstacle': cell.obstacle,
+                  'has-charger': cell.charger,
                   selected: cell.robot?.id === selectedRobotId,
                 }"
                 :disabled="!isReady || isSaving"
                 role="gridcell"
-                :aria-label="
-                  cell.robot
-                    ? `${cell.robot.id} at ${cell.x}, ${cell.y}, facing ${cell.robot.facing}. Click to select.`
-                    : cell.obstacle
-                      ? obstacleMode
-                        ? `Remove obstacle at ${cell.x}, ${cell.y}`
-                        : `Obstacle at ${cell.x}, ${cell.y}. Enable obstacle edit mode to remove.`
-                      : obstacleMode
-                        ? `Place obstacle at ${cell.x}, ${cell.y}`
-                        : `Place robot at ${cell.x}, ${cell.y}`
-                "
+                :aria-label="cellAriaLabel(cell)"
                 :aria-pressed="cell.robot?.id === selectedRobotId"
                 @click="handleCellClick(cell)"
               >
+                <span v-if="cell.charger" class="charger-marker" aria-hidden="true">
+                  C
+                </span>
                 <span v-if="cell.obstacle" aria-hidden="true">■</span>
                 <template v-else-if="cell.robot">
                   <span>{{ cell.robot.id }}</span>
@@ -460,21 +508,32 @@ export default {
       </div>
 
       <p class="origin-note">Coordinates start at (0, 0) in the bottom-left.</p>
-      <div class="obstacle-mode">
+      <div class="floor-edit-modes">
         <button
           type="button"
-          class="obstacle-mode-toggle"
+          class="floor-mode-toggle"
           :aria-pressed="obstacleMode"
           :disabled="!isReady || isSaving"
-          @click="obstacleMode = !obstacleMode"
+          @click="toggleObstacleMode"
         >
           Obstacle edit mode
+        </button>
+        <button
+          type="button"
+          class="floor-mode-toggle"
+          :aria-pressed="chargerMode"
+          :disabled="!isReady || isSaving"
+          @click="toggleChargerMode"
+        >
+          Charger edit mode
         </button>
         <p class="obstacle-mode-help" role="status">
           {{
             obstacleMode
               ? 'On — click floor cells to add or remove obstacles. Turn this off to place robots.'
-              : 'Off — clicking an empty cell places a robot. Turn this on to add or remove obstacles.'
+              : chargerMode
+                ? 'On — click any floor cell to add or remove a charger (shown as C). Robots can enter chargers and gain 10 battery at tick end.'
+                : 'Off — clicking an empty cell places a robot. Turn on an edit mode to change floor cells.'
           }}
         </p>
       </div>
@@ -833,6 +892,7 @@ button:disabled {
 }
 
 .floor-cell {
+  position: relative;
   display: flex;
   min-height: 0;
   width: 2rem;
@@ -871,6 +931,15 @@ button:disabled {
   font-size: 0.8rem;
 }
 
+.charger-marker {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  color: #a45b00;
+  font-size: 0.55rem;
+  line-height: 1;
+}
+
 .x-axis {
   align-items: center;
 }
@@ -879,7 +948,7 @@ button:disabled {
   margin-top: 0.75rem;
 }
 
-.obstacle-mode {
+.floor-edit-modes {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -887,11 +956,11 @@ button:disabled {
   margin-top: 0.75rem;
 }
 
-.obstacle-mode-toggle[aria-pressed="true"] {
+.floor-mode-toggle[aria-pressed="true"] {
   background: #344594;
 }
 
-.obstacle-mode-toggle[aria-pressed="true"]:hover {
+.floor-mode-toggle[aria-pressed="true"]:hover {
   background: #293879;
 }
 

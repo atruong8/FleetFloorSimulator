@@ -7,6 +7,7 @@ export interface Floor {
   width: number
   height: number
   obstacles: Position[]
+  chargers: Position[]
 }
 
 export declare const MIN_FLOOR_SIZE: number

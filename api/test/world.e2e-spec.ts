@@ -99,6 +99,7 @@ describe('World API persistence (e2e)', () => {
       width: 3,
       height: 3,
       obstacles: [{ x: 2, y: 2 }],
+      chargers: [],
     })
     expect(restoredResponse.body.robots[0].position).toEqual({ x: 1, y: 2 })
     expect(restoredResponse.body.tickCount).toBe(1)
@@ -120,6 +121,63 @@ describe('World API persistence (e2e)', () => {
       .post('/api/world/obstacles')
       .send({ x: 0, y: 0 })
       .expect(400)
+
+    await request(app!.getHttpServer())
+      .post('/api/world/chargers')
+      .send({ x: 10, y: 0 })
+      .expect(400)
+  })
+
+  it('allows chargers under robots and lets robots move through charger cells', async () => {
+    await request(app!.getHttpServer())
+      .post('/api/world/floor')
+      .send({ width: 3, height: 1 })
+      .expect(201)
+
+    await request(app!.getHttpServer())
+      .post('/api/world/robots')
+      .send({ x: 0, y: 0 })
+      .expect(201)
+
+    const underRobotResponse = await request(app!.getHttpServer())
+      .post('/api/world/chargers')
+      .send({ x: 0, y: 0 })
+      .expect(201)
+    expect(underRobotResponse.body.floor.chargers).toEqual([{ x: 0, y: 0 }])
+
+    await request(app!.getHttpServer())
+      .post('/api/world/chargers')
+      .send({ x: 1, y: 0 })
+      .expect(201)
+
+    await request(app!.getHttpServer())
+      .post('/api/world/robots/R1/commands')
+      .send({ command: 'RIGHT' })
+      .expect(201)
+    await request(app!.getHttpServer()).post('/api/world/tick').expect(201)
+
+    await request(app!.getHttpServer())
+      .post('/api/world/robots/R1/commands')
+      .send({ command: 'MOVE' })
+      .expect(201)
+    const chargerTick = await request(app!.getHttpServer())
+      .post('/api/world/tick')
+      .expect(201)
+    expect(chargerTick.body.robots[0].position).toEqual({ x: 1, y: 0 })
+    expect(chargerTick.body.robots[0].battery).toBe(100)
+
+    await request(app!.getHttpServer())
+      .post('/api/world/robots/R1/commands')
+      .send({ command: 'MOVE' })
+      .expect(201)
+    const exitTick = await request(app!.getHttpServer())
+      .post('/api/world/tick')
+      .expect(201)
+    expect(exitTick.body.robots[0].position).toEqual({ x: 2, y: 0 })
+    expect(exitTick.body.robots[0].battery).toBe(99)
+    expect(
+      exitTick.body.history.filter((entry) => entry.type === 'charger.toggled'),
+    ).toHaveLength(2)
   })
 
   it('clears history without changing the saved world', async () => {
@@ -156,6 +214,7 @@ describe('World API persistence (e2e)', () => {
       width: 4,
       height: 3,
       obstacles: [],
+      chargers: [],
     })
     expect(clearResponse.body.robots).toEqual([
       {

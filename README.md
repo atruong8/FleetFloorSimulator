@@ -34,9 +34,9 @@ npm.cmd run build
 
 ## Scenario runner
 
-The runner currently supports `FLOOR W,H`, `OBSTACLE X,Y`, `PLACE`, `QUEUE`,
-`TICK`, `REPORT`, and `REPORT BATTERY`. The floor defaults to 5×5 when no
-`FLOOR` command is provided.
+The runner currently supports `FLOOR W,H`, `OBSTACLE X,Y`, `CHARGER X,Y`,
+`PLACE`, `QUEUE`, `TICK`, `REPORT`, and `REPORT BATTERY`. The floor defaults
+to 5×5 when no `FLOOR` command is provided.
 Commands are run through the shared simulation engine. For example, the
 “A chain of robots moves together” scenario is:
 
@@ -67,7 +67,7 @@ npm run scenario -- scenarios/contested-cell-and-robot-stuck-behind-loser.txt
 
 It reports `R1 1,1,EAST`, `R2 2,1,WEST`, and `R3 3,1,WEST`. All five core
 scenario examples from the assessment are included; module-specific scenario
-commands such as `GOTO` and `CHARGER` are not implemented.
+commands such as `GOTO` are not implemented.
 
 The four-robot rotation example is included as well:
 
@@ -103,17 +103,26 @@ npm run scenario -- scenarios/battery-consumption.txt
 
 It reports `R1 98`: on the 3×1 floor, only two of the three moves succeed, and
 blocked moves do not consume battery. This follows the movement rule even though
-the PDF example lists `R1 97`. `CHARGER` and charger behavior are not implemented
-yet.
+the PDF example lists `R1 97`.
+
+The charger example shows that a robot can move onto and through a charger cell:
+
+```sh
+npm run scenario -- scenarios/charger-recharges-and-allows-passage.txt
+```
+
+Chargers do not block movement. Each robot ending a tick on a charger gains 10
+battery, up to 100. In the UI, enable **Charger edit mode** and click any cell
+to add or remove a charger; turn edit mode off to place robots.
 
 The UI supports creating floors, placing robots, queueing `MOVE`, `LEFT`, and
 `RIGHT`, and stepping or playing the simulation. The NestJS API stores the
 current world snapshot and an event history in SQLite. The UI loads
 the saved world when opened and records floor creation, robot placement,
-queued commands, obstacle changes, and completed ticks. Starting a new floor
+queued commands, obstacle and charger changes, and completed ticks. Starting a new floor
 resets the current world but preserves the event history. Use **Clear history**
 in the UI to delete only history entries; it preserves the current floor,
 robots, queues, and tick count.
 
 Robots start with 100 battery, and successful moves consume one. A robot at
-zero battery cannot move. Chargers are not implemented yet.
+zero battery cannot move.

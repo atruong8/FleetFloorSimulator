@@ -161,6 +161,42 @@ test('only successful MOVE commands consume battery', () => {
   )
 })
 
+test('robots recharge by 10 at tick end on chargers, capped at 100', () => {
+  const floor = {
+    ...createFloor(3, 1),
+    chargers: [{ x: 1, y: 0 }],
+  }
+  const robots = [
+    { ...createRobot('R1', { x: 0, y: 0 }, 'EAST'), battery: 95, queue: ['MOVE'] },
+    { ...createRobot('R2', { x: 2, y: 0 }), battery: 90, queue: [] },
+  ]
+
+  const result = advanceTick(floor, robots)
+
+  assert.deepEqual(result.robots.map((robot) => robot.battery), [100, 90])
+  assert.deepEqual(
+    result.results.map((entry) => entry.battery),
+    [100, 90],
+  )
+})
+
+test('a robot on a charger recharges after a blocked move', () => {
+  const floor = {
+    ...createFloor(1, 1),
+    chargers: [{ x: 0, y: 0 }],
+  }
+  const robot = {
+    ...createRobot('R1', { x: 0, y: 0 }),
+    battery: 0,
+    queue: ['MOVE'],
+  }
+
+  const result = advanceTick(floor, [robot])
+
+  assert.equal(result.results[0].reason, 'NO_BATTERY')
+  assert.equal(result.robots[0].battery, 10)
+})
+
 test('a zero-battery robot cannot move and records NO_BATTERY', () => {
   const floor = createFloor(2, 1)
   const robot = {
@@ -174,6 +210,7 @@ test('a zero-battery robot cannot move and records NO_BATTERY', () => {
   assert.deepEqual(result.results[0], {
     robotId: 'R1',
     action: 'blocked',
+    battery: 0,
     command: 'MOVE',
     from: { x: 0, y: 0 },
     to: { x: 0, y: 0 },

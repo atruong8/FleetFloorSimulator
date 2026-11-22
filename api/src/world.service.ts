@@ -32,6 +32,7 @@ type WorldEventType =
   | 'robot.placed'
   | 'robot.command_queued'
   | 'obstacle.toggled'
+  | 'charger.toggled'
   | 'tick.completed'
 
 function isRobotCommand(command: unknown): command is RobotCommand {
@@ -287,6 +288,41 @@ export class WorldService implements OnModuleDestroy {
     )
   }
 
+  toggleCharger(position?: Partial<Position>): WorldResponse {
+    if (
+      !position ||
+      typeof position.x !== 'number' ||
+      typeof position.y !== 'number' ||
+      !Number.isInteger(position.x) ||
+      !Number.isInteger(position.y)
+    ) {
+      throw new BadRequestException('Charger position must use integer coordinates')
+    }
+
+    const targetPosition = { x: position.x, y: position.y }
+    const current = this.readSnapshot()
+
+    if (!isInsideFloor(current.floor, targetPosition)) {
+      throw new BadRequestException('Charger position must be within floor bounds')
+    }
+
+    const existingIndex = current.floor.chargers.findIndex(
+      (charger) =>
+        charger.x === targetPosition.x && charger.y === targetPosition.y,
+    )
+    const isCharger = existingIndex === -1
+    const chargers = isCharger
+      ? [...current.floor.chargers, targetPosition]
+      : current.floor.chargers.filter((_, index) => index !== existingIndex)
+    const floor = { ...current.floor, chargers }
+
+    return this.recordChange(
+      { ...current, floor },
+      'charger.toggled',
+      { position: targetPosition, isCharger },
+    )
+  }
+
   advanceTick(): WorldResponse {
     const current = this.readSnapshot()
     // Run the same tick engine used by the rest of the simulator.
@@ -311,6 +347,8 @@ export class WorldService implements OnModuleDestroy {
     const snapshot = JSON.parse(row.snapshot_json) as WorldSnapshot
     return {
       ...snapshot,
+      // Older saved floors predate charger state.
+      floor: { ...snapshot.floor, chargers: snapshot.floor.chargers ?? [] },
       // Older saved robots predate battery state; treat them as fully charged.
       robots: snapshot.robots.map((robot) => ({
         ...robot,

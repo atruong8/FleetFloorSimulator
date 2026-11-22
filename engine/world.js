@@ -338,6 +338,27 @@ function applyMoveOutcomes(
   }
 }
 
+// Charge robots after all moves resolve, based on the cells where they ended the tick.
+function rechargeRobotsOnChargers(floor, robots, results) {
+  const chargers = new Set(floor.chargers.map(positionKey))
+  const robotsById = new Map()
+
+  const rechargedRobots = robots.map((robot) => {
+    const battery = chargers.has(positionKey(robot.position))
+      ? Math.min(100, robot.battery + 10)
+      : robot.battery
+    const rechargedRobot = { ...robot, battery }
+    robotsById.set(robot.id, rechargedRobot)
+    return rechargedRobot
+  })
+
+  for (const result of results) {
+    result.battery = robotsById.get(result.robotId).battery
+  }
+
+  return rechargedRobots
+}
+
 export function advanceTick(floor, robots) {
   const { nextRobots, results, movePlans, blockedMoves } = prepareTick(
     floor,
@@ -369,5 +390,8 @@ export function advanceTick(floor, robots) {
     moveOutcomes,
   )
 
-  return { robots: nextRobots, results }
+  return {
+    robots: rechargeRobotsOnChargers(floor, nextRobots, results),
+    results,
+  }
 }
