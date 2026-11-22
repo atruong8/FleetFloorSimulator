@@ -13,6 +13,12 @@ export interface Floor {
 export declare const MIN_FLOOR_SIZE: number
 export declare const MAX_FLOOR_SIZE: number
 export declare function createFloor(width?: number, height?: number): Floor
+export declare function addObstacle(
+  floor: Floor,
+  robots: Array<{ position: Position }>,
+  position: Position,
+): Floor
+export declare function addCharger(floor: Floor, position: Position): Floor
 export declare function isInsideFloor(
   floor: Floor,
   position: Position | undefined,

@@ -1,3 +1,5 @@
+import { isInsideFloor } from './floor.js'
+
 const FACINGS = new Set(['NORTH', 'EAST', 'SOUTH', 'WEST'])
 
 export function createRobot(id, position, facing = 'NORTH') {
@@ -26,4 +28,50 @@ export function createRobot(id, position, facing = 'NORTH') {
     battery: 100,
     queue: [],
   }
+}
+
+// Scenario PLACE ignores invalid positions and preserves state when repositioning.
+export function placeScenarioRobot(floor, robots, id, position, facing) {
+  let robot
+  try {
+    robot = createRobot(id, position, facing)
+  } catch (error) {
+    if (error instanceof RangeError) {
+      return robots
+    }
+    throw error
+  }
+
+  if (!isInsideFloor(floor, robot.position)) {
+    return robots
+  }
+
+  const existingRobotIndex = robots.findIndex(
+    (existingRobot) => existingRobot.id === robot.id,
+  )
+  const otherRobots = robots.filter((_, index) => index !== existingRobotIndex)
+  const isOccupied = otherRobots.some(
+    (existingRobot) =>
+      existingRobot.position.x === robot.position.x &&
+      existingRobot.position.y === robot.position.y,
+  )
+  const hasObstacle = floor.obstacles.some(
+    (obstacle) =>
+      obstacle.x === robot.position.x && obstacle.y === robot.position.y,
+  )
+
+  if (isOccupied || hasObstacle) {
+    return robots
+  }
+
+  if (existingRobotIndex === -1) {
+    return [...robots, robot]
+  }
+
+  // Repositioning preserves battery and queued commands.
+  robot.battery = robots[existingRobotIndex].battery
+  robot.queue = robots[existingRobotIndex].queue
+  return robots.map((existingRobot, index) =>
+    index === existingRobotIndex ? robot : existingRobot,
+  )
 }

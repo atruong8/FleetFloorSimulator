@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { createFloor, isInsideFloor } from './floor.js'
+import {
+  addCharger,
+  addObstacle,
+  createFloor,
+  isInsideFloor,
+} from './floor.js'
 
 test('createFloor defaults to a 10 by 8 empty floor', () => {
   assert.deepEqual(createFloor(), {
@@ -33,4 +38,24 @@ test('isInsideFloor includes the edges and rejects invalid positions', () => {
   assert.equal(isInsideFloor(floor, { x: 3, y: 1 }), false)
   assert.equal(isInsideFloor(floor, { x: 1, y: -1 }), false)
   assert.equal(isInsideFloor(floor, { x: 1.5, y: 1 }), false)
+})
+
+test('addObstacle ignores occupied, duplicate, and out-of-bounds cells', () => {
+  const floor = createFloor(2, 1)
+  const robots = [{ position: { x: 1, y: 0 } }]
+  const withObstacle = addObstacle(floor, robots, { x: 0, y: 0 })
+
+  assert.deepEqual(withObstacle.obstacles, [{ x: 0, y: 0 }])
+  assert.equal(addObstacle(withObstacle, robots, { x: 0, y: 0 }), withObstacle)
+  assert.equal(addObstacle(floor, robots, { x: 1, y: 0 }), floor)
+  assert.equal(addObstacle(floor, robots, { x: 2, y: 0 }), floor)
+})
+
+test('addCharger ignores duplicate and out-of-bounds cells', () => {
+  const floor = createFloor(2, 1)
+  const withCharger = addCharger(floor, { x: 0, y: 0 })
+
+  assert.deepEqual(withCharger.chargers, [{ x: 0, y: 0 }])
+  assert.equal(addCharger(withCharger, { x: 0, y: 0 }), withCharger)
+  assert.equal(addCharger(floor, { x: 2, y: 0 }), floor)
 })

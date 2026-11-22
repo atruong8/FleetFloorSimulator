@@ -32,3 +32,47 @@ export function isInsideFloor(floor, position) {
     y < floor.height
   )
 }
+
+export function addObstacle(floor, robots, position) {
+  if (!isInsideFloor(floor, position)) {
+    return floor
+  }
+
+  const isOccupied = robots.some(
+    (robot) =>
+      robot.position.x === position.x && robot.position.y === position.y,
+  )
+  const alreadyHasObstacle = floor.obstacles.some(
+    (obstacle) =>
+      obstacle.x === position.x && obstacle.y === position.y,
+  )
+
+  if (isOccupied || alreadyHasObstacle) {
+    return floor
+  }
+
+  return {
+    ...floor,
+    obstacles: [...floor.obstacles, { ...position }],
+  }
+}
+
+export function addCharger(floor, position) {
+  if (!isInsideFloor(floor, position)) {
+    return floor
+  }
+
+  const alreadyHasCharger = floor.chargers.some(
+    (charger) =>
+      charger.x === position.x && charger.y === position.y,
+  )
+
+  if (alreadyHasCharger) {
+    return floor
+  }
+
+  return {
+    ...floor,
+    chargers: [...floor.chargers, { ...position }],
+  }
+}

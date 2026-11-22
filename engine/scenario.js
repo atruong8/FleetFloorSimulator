@@ -1,102 +1,14 @@
 import {
+  addCharger,
+  addObstacle,
   createFloor,
-  isInsideFloor,
   MAX_FLOOR_SIZE,
   MIN_FLOOR_SIZE,
 } from './floor.js'
-import { createRobot } from './robot.js'
+import { placeScenarioRobot } from './robot.js'
 import { advanceTick, queueRobotCommand } from './world.js'
 
 const VALID_COMMANDS = new Set(['MOVE', 'LEFT', 'RIGHT'])
-
-// Add a robot at a valid cell, or reposition it if that ID already exists.
-function placeScenarioRobot(floor, robots, id, position, facing) {
-  let robot
-  try {
-    robot = createRobot(id, position, facing)
-  } catch (error) {
-    // Scenario files continue after invalid input, but unexpected errors should surface.
-    if (error instanceof RangeError) {
-      return robots
-    }
-    throw error
-  }
-
-  if (!isInsideFloor(floor, robot.position)) {
-    return robots
-  }
-
-  const existingRobotIndex = robots.findIndex(
-    (existingRobot) => existingRobot.id === robot.id,
-  )
-  const otherRobots = robots.filter((_, index) => index !== existingRobotIndex)
-  const isOccupied = otherRobots.some(
-    (existingRobot) =>
-      existingRobot.position.x === robot.position.x &&
-      existingRobot.position.y === robot.position.y,
-  )
-  const hasObstacle = floor.obstacles.some(
-    (obstacle) =>
-      obstacle.x === robot.position.x && obstacle.y === robot.position.y,
-  )
-
-  if (isOccupied || hasObstacle) {
-    return robots
-  }
-
-  if (existingRobotIndex === -1) {
-    return [...robots, robot]
-  }
-
-  // Repositioning changes location and facing without discarding queued commands.
-  robot.battery = robots[existingRobotIndex].battery
-  robot.queue = robots[existingRobotIndex].queue
-  return robots.map((existingRobot, index) =>
-    index === existingRobotIndex ? robot : existingRobot,
-  )
-}
-
-// Add an obstacle only when its cell is in bounds and unoccupied.
-function addScenarioObstacle(floor, robots, position) {
-  const isOccupied = robots.some(
-    (robot) =>
-      robot.position.x === position.x && robot.position.y === position.y,
-  )
-  const alreadyHasObstacle = floor.obstacles.some(
-    (obstacle) =>
-      obstacle.x === position.x && obstacle.y === position.y,
-  )
-
-  if (
-    !isInsideFloor(floor, position) ||
-    isOccupied ||
-    alreadyHasObstacle
-  ) {
-    return floor
-  }
-
-  return {
-    ...floor,
-    obstacles: [...floor.obstacles, { ...position }],
-  }
-}
-
-// Add a charger to any in-bounds cell; chargers do not block robots.
-function addScenarioCharger(floor, position) {
-  const alreadyHasCharger = floor.chargers.some(
-    (charger) =>
-      charger.x === position.x && charger.y === position.y,
-  )
-
-  if (!isInsideFloor(floor, position) || alreadyHasCharger) {
-    return floor
-  }
-
-  return {
-    ...floor,
-    chargers: [...floor.chargers, { ...position }],
-  }
-}
 
 // Validate the full command list first so an invalid line cannot queue only part of it.
 function queueScenarioCommands(robots, id, commands) {
@@ -192,7 +104,7 @@ export function runScenario(input) {
     // OBSTACLE adds a blocking cell; invalid or occupied positions are ignored.
     const obstacleCommand = line.match(/^OBSTACLE\s+(\d+)\s*,\s*(\d+)$/i)
     if (obstacleCommand) {
-      floor = addScenarioObstacle(floor, robots, {
+      floor = addObstacle(floor, robots, {
         x: Number(obstacleCommand[1]),
         y: Number(obstacleCommand[2]),
       })
@@ -202,7 +114,7 @@ export function runScenario(input) {
     // CHARGER marks an in-bounds cell without affecting robot movement.
     const chargerCommand = line.match(/^CHARGER\s+(\d+)\s*,\s*(\d+)$/i)
     if (chargerCommand) {
-      floor = addScenarioCharger(floor, {
+      floor = addCharger(floor, {
         x: Number(chargerCommand[1]),
         y: Number(chargerCommand[2]),
       })
