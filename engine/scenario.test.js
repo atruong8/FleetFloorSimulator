@@ -107,6 +107,19 @@ REPORT`)
   assert.equal(result.tickCount, 13)
 })
 
+test('OBSTACLE blocks a robot MOVE and appears on the floor', () => {
+  const result = runScenario(`FLOOR 5,5
+PLACE R1 1,1,EAST
+OBSTACLE 2,1
+QUEUE R1 MOVE
+TICK
+REPORT`)
+
+  assert.deepEqual(result.floor.obstacles, [{ x: 2, y: 1 }])
+  assert.deepEqual(result.reports, ['R1 1,1,EAST'])
+  assert.deepEqual(result.robots[0].queue, [])
+})
+
 test('scenario defaults to a 5 by 5 floor and ignores blank and comment lines', () => {
   const result = runScenario('\n# default floor\n\nreport\n')
 

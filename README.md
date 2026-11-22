@@ -34,8 +34,8 @@ npm.cmd run build
 
 ## Scenario runner
 
-The runner currently supports `FLOOR W,H`, `PLACE`, `QUEUE`, `TICK`, and
-`REPORT`. The floor defaults to 5×5 when no `FLOOR` command is provided.
+The runner currently supports `FLOOR W,H`, `OBSTACLE X,Y`, `PLACE`, `QUEUE`,
+`TICK`, and `REPORT`. The floor defaults to 5×5 when no `FLOOR` command is provided.
 Commands are run through the shared simulation engine. For example, the
 “A chain of robots moves together” scenario is:
 
@@ -85,9 +85,19 @@ npm run scenario -- scenarios/queues-of-different-lengths.txt
 It reports `R1 2,2,SOUTH` / `R2 1,1,EAST` after three ticks, then
 `R1 2,2,SOUTH` / `R2 3,1,EAST` after ten more ticks.
 
+The obstacle example blocks R1's MOVE:
+
+```sh
+npm run scenario -- scenarios/obstacle-blocks-move.txt
+```
+
+It reports `R1 1,1,EAST`; the queued MOVE is consumed even though it is blocked.
+
 The UI supports creating floors, placing robots, queueing `MOVE`, `LEFT`, and
 `RIGHT`, and stepping or playing the simulation. The NestJS API stores the
-current world snapshot and an append-only event history in SQLite. The UI loads
+current world snapshot and an event history in SQLite. The UI loads
 the saved world when opened and records floor creation, robot placement,
 queued commands, obstacle changes, and completed ticks. Starting a new floor
-resets the current world but preserves the event history.
+resets the current world but preserves the event history. Use **Clear history**
+in the UI to delete only history entries; it preserves the current floor,
+robots, queues, and tick count.

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common'
 import { WorldService } from './world.service.js'
 
 interface FloorBody {
@@ -22,6 +22,11 @@ export class WorldController {
   @Get()
   getWorld() {
     return this.worldService.getWorld()
+  }
+
+  @Delete('history')
+  clearHistory() {
+    return this.worldService.clearHistory()
   }
 
   @Post('floor')

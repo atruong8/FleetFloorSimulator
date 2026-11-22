@@ -138,6 +138,15 @@ export class WorldService implements OnModuleDestroy {
     }
   }
 
+  clearHistory(): WorldResponse {
+    // Do not record this operation in the table it clears; keep the snapshot intact.
+    const result = this.database.prepare('DELETE FROM world_history').run()
+    this.logger.log(
+      `Cleared ${result.changes} world history entries; current world state preserved.`,
+    )
+    return this.getWorld()
+  }
+
   createFloor(width: unknown, height: unknown): WorldResponse {
     if (
       typeof width !== 'number' ||

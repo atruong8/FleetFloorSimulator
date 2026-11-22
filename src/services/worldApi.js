@@ -33,6 +33,10 @@ export function getWorld() {
   return requestWorld()
 }
 
+export function clearWorldHistory() {
+  return requestWorld('/history', { method: 'DELETE' })
+}
+
 export function createFloor(width, height) {
   return requestWorld('/floor', {
     method: 'POST',

@@ -120,4 +120,57 @@ describe('World API persistence (e2e)', () => {
       .send({ x: 0, y: 0 })
       .expect(400)
   })
+
+  it('clears history without changing the saved world', async () => {
+    await request(app!.getHttpServer())
+      .post('/api/world/floor')
+      .send({ width: 4, height: 3 })
+      .expect(201)
+
+    await request(app!.getHttpServer())
+      .post('/api/world/robots')
+      .send({ x: 1, y: 1 })
+      .expect(201)
+
+    await request(app!.getHttpServer())
+      .post('/api/world/robots/R1/commands')
+      .send({ command: 'RIGHT' })
+      .expect(201)
+
+    await request(app!.getHttpServer())
+      .post('/api/world/tick')
+      .expect(201)
+
+    await request(app!.getHttpServer())
+      .post('/api/world/robots/R1/commands')
+      .send({ command: 'LEFT' })
+      .expect(201)
+
+    const clearResponse = await request(app!.getHttpServer())
+      .delete('/api/world/history')
+      .expect(200)
+
+    expect(clearResponse.body.history).toEqual([])
+    expect(clearResponse.body.floor).toEqual({
+      width: 4,
+      height: 3,
+      obstacles: [],
+    })
+    expect(clearResponse.body.robots).toEqual([
+      {
+        id: 'R1',
+        position: { x: 1, y: 1 },
+        facing: 'EAST',
+        queue: ['LEFT'],
+      },
+    ])
+    expect(clearResponse.body.tickCount).toBe(1)
+
+    const restoredResponse = await request(app!.getHttpServer())
+      .get('/api/world')
+      .expect(200)
+    expect(restoredResponse.body.history).toEqual([])
+    expect(restoredResponse.body.robots).toEqual(clearResponse.body.robots)
+    expect(restoredResponse.body.tickCount).toBe(1)
+  })
 })

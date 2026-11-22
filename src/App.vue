@@ -6,6 +6,7 @@ import {
 } from '../engine/floor.js'
 import {
   advanceWorldTick,
+  clearWorldHistory,
   createFloor,
   getWorld,
   placeWorldRobot,
@@ -138,6 +139,16 @@ export default {
       } finally {
         this.isSaving = false
       }
+    },
+    async clearSimulationHistory() {
+      const confirmed = window.confirm(
+        'Clear simulation history? The current floor, robots, queues, and tick count will be kept.',
+      )
+      if (!confirmed) {
+        return
+      }
+
+      return this.saveWorldChange(clearWorldHistory)
     },
     createFloorFromInputs() {
       this.errorMessage = ''
@@ -449,14 +460,24 @@ export default {
       </div>
 
       <p class="origin-note">Coordinates start at (0, 0) in the bottom-left.</p>
-      <label class="obstacle-mode">
-        <input
-          v-model="obstacleMode"
-          type="checkbox"
+      <div class="obstacle-mode">
+        <button
+          type="button"
+          class="obstacle-mode-toggle"
+          :aria-pressed="obstacleMode"
           :disabled="!isReady || isSaving"
-        />
-        Edit obstacles by clicking floor cells
-      </label>
+          @click="obstacleMode = !obstacleMode"
+        >
+          Obstacle edit mode
+        </button>
+        <p class="obstacle-mode-help" role="status">
+          {{
+            obstacleMode
+              ? 'On — click floor cells to add or remove obstacles. Turn this off to place robots.'
+              : 'Off — clicking an empty cell places a robot. Turn this on to add or remove obstacles.'
+          }}
+        </p>
+      </div>
       <p v-if="selectedRobotId" class="selection-note" role="status">
         Selected robot: {{ selectedRobotId }}
       </p>
@@ -551,7 +572,16 @@ export default {
     </section>
 
     <section class="panel" aria-labelledby="history-heading">
-      <h2 id="history-heading">Simulation history</h2>
+      <div class="history-header">
+        <h2 id="history-heading">Simulation history</h2>
+        <button
+          type="button"
+          :disabled="!isReady || isSaving || history.length === 0"
+          @click="clearSimulationHistory"
+        >
+          Clear history
+        </button>
+      </div>
       <ol v-if="history.length" class="history-list">
         <li
           v-for="entry in history.slice().reverse()"
@@ -851,9 +881,22 @@ button:disabled {
 
 .obstacle-mode {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   margin-top: 0.75rem;
+}
+
+.obstacle-mode-toggle[aria-pressed="true"] {
+  background: #344594;
+}
+
+.obstacle-mode-toggle[aria-pressed="true"]:hover {
+  background: #293879;
+}
+
+.obstacle-mode-help {
+  margin: 0;
   color: #465166;
   font-size: 0.9rem;
 }
@@ -935,6 +978,28 @@ button:disabled {
   overflow: auto;
   margin: 1rem 0 0;
   padding-left: 1.5rem;
+}
+
+.history-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.history-header button {
+  min-height: 2.25rem;
+  padding: 0.45rem 0.8rem;
+  background: #596579;
+}
+
+.history-header button:hover {
+  background: #465166;
+}
+
+.history-header button:disabled {
+  background: #aab2c3;
 }
 
 .history-list li {

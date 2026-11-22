@@ -55,6 +55,31 @@ function placeScenarioRobot(floor, robots, id, position, facing) {
   )
 }
 
+// Add an obstacle only when its cell is in bounds and unoccupied.
+function addScenarioObstacle(floor, robots, position) {
+  const isOccupied = robots.some(
+    (robot) =>
+      robot.position.x === position.x && robot.position.y === position.y,
+  )
+  const alreadyHasObstacle = floor.obstacles.some(
+    (obstacle) =>
+      obstacle.x === position.x && obstacle.y === position.y,
+  )
+
+  if (
+    !isInsideFloor(floor, position) ||
+    isOccupied ||
+    alreadyHasObstacle
+  ) {
+    return floor
+  }
+
+  return {
+    ...floor,
+    obstacles: [...floor.obstacles, { ...position }],
+  }
+}
+
 // Validate the full command list first so an invalid line cannot queue only part of it.
 function queueScenarioCommands(robots, id, commands) {
   const normalizedCommands = commands.map((command) => command.toUpperCase())
@@ -128,6 +153,16 @@ export function runScenario(input) {
         robots = []
         tickCount = 0
       }
+      continue
+    }
+
+    // OBSTACLE adds a blocking cell; invalid or occupied positions are ignored.
+    const obstacleCommand = line.match(/^OBSTACLE\s+(\d+)\s*,\s*(\d+)$/i)
+    if (obstacleCommand) {
+      floor = addScenarioObstacle(floor, robots, {
+        x: Number(obstacleCommand[1]),
+        y: Number(obstacleCommand[2]),
+      })
       continue
     }
 
