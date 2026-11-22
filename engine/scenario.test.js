@@ -124,6 +124,19 @@ REPORT`)
   assert.deepEqual(result.robots[0].queue, [])
 })
 
+test('REPORT BATTERY shows remaining battery after successful and blocked moves', () => {
+  const result = runScenario(`FLOOR 3,1
+PLACE R1 0,0,EAST
+QUEUE R1 MOVE MOVE MOVE
+TICK 3
+REPORT BATTERY`)
+
+  assert.deepEqual(result.reports, ['R1 98'])
+  assert.deepEqual(result.robots[0].position, { x: 2, y: 0 })
+  assert.equal(result.robots[0].battery, 98)
+  assert.deepEqual(result.robots[0].queue, [])
+})
+
 test('scenario defaults to a 5 by 5 floor and ignores blank and comment lines', () => {
   const result = runScenario('\n# default floor\n\nreport\n')
 

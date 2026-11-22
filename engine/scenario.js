@@ -124,6 +124,21 @@ function reportRobots(robots) {
     .join('\n')
 }
 
+// Report remaining battery in the same numeric robot-ID order as REPORT.
+function reportBatteries(robots) {
+  if (robots.length === 0) {
+    return 'EMPTY'
+  }
+
+  return [...robots]
+    .sort(
+      (left, right) =>
+        Number(left.id.slice(1)) - Number(right.id.slice(1)),
+    )
+    .map((robot) => `${robot.id} ${robot.battery}`)
+    .join('\n')
+}
+
 export function runScenario(input) {
   let floor = createFloor(5, 5)
   let robots = []
@@ -205,6 +220,12 @@ export function runScenario(input) {
           tickCount += 1
         }
       }
+      continue
+    }
+
+    // Save a snapshot of robot batteries when requested by the Module B format.
+    if (/^REPORT\s+BATTERY$/i.test(line)) {
+      reports.push(reportBatteries(robots))
       continue
     }
 

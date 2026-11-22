@@ -35,7 +35,8 @@ npm.cmd run build
 ## Scenario runner
 
 The runner currently supports `FLOOR W,H`, `OBSTACLE X,Y`, `PLACE`, `QUEUE`,
-`TICK`, and `REPORT`. The floor defaults to 5×5 when no `FLOOR` command is provided.
+`TICK`, `REPORT`, and `REPORT BATTERY`. The floor defaults to 5×5 when no
+`FLOOR` command is provided.
 Commands are run through the shared simulation engine. For example, the
 “A chain of robots moves together” scenario is:
 
@@ -93,6 +94,17 @@ npm run scenario -- scenarios/obstacle-blocks-move.txt
 ```
 
 It reports `R1 1,1,EAST`; the queued MOVE is consumed even though it is blocked.
+
+The Module B battery example is in [battery-consumption.txt](scenarios/battery-consumption.txt):
+
+```sh
+npm run scenario -- scenarios/battery-consumption.txt
+```
+
+It reports `R1 98`: on the 3×1 floor, only two of the three moves succeed, and
+blocked moves do not consume battery. This follows the movement rule even though
+the PDF example lists `R1 97`. `CHARGER` and charger behavior are not implemented
+yet.
 
 The UI supports creating floors, placing robots, queueing `MOVE`, `LEFT`, and
 `RIGHT`, and stepping or playing the simulation. The NestJS API stores the
