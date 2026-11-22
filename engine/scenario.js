@@ -1,16 +1,119 @@
-import { createFloor, MAX_FLOOR_SIZE, MIN_FLOOR_SIZE } from './floor.js'
+import {
+  createFloor,
+  isInsideFloor,
+  MAX_FLOOR_SIZE,
+  MIN_FLOOR_SIZE,
+} from './floor.js'
+import { createRobot } from './robot.js'
+import { advanceTick, queueRobotCommand } from './world.js'
+
+const VALID_COMMANDS = new Set(['MOVE', 'LEFT', 'RIGHT'])
+
+// Add a robot at a valid cell, or reposition it if that ID already exists.
+function placeScenarioRobot(floor, robots, id, position, facing) {
+  let robot
+  try {
+    robot = createRobot(id, position, facing)
+  } catch (error) {
+    // Scenario files continue after invalid input, but unexpected errors should surface.
+    if (error instanceof RangeError) {
+      return robots
+    }
+    throw error
+  }
+
+  if (!isInsideFloor(floor, robot.position)) {
+    return robots
+  }
+
+  const existingRobotIndex = robots.findIndex(
+    (existingRobot) => existingRobot.id === robot.id,
+  )
+  const otherRobots = robots.filter((_, index) => index !== existingRobotIndex)
+  const isOccupied = otherRobots.some(
+    (existingRobot) =>
+      existingRobot.position.x === robot.position.x &&
+      existingRobot.position.y === robot.position.y,
+  )
+  const hasObstacle = floor.obstacles.some(
+    (obstacle) =>
+      obstacle.x === robot.position.x && obstacle.y === robot.position.y,
+  )
+
+  if (isOccupied || hasObstacle) {
+    return robots
+  }
+
+  if (existingRobotIndex === -1) {
+    return [...robots, robot]
+  }
+
+  // Repositioning changes location and facing without discarding queued commands.
+  robot.queue = robots[existingRobotIndex].queue
+  return robots.map((existingRobot, index) =>
+    index === existingRobotIndex ? robot : existingRobot,
+  )
+}
+
+// Validate the full command list first so an invalid line cannot queue only part of it.
+function queueScenarioCommands(robots, id, commands) {
+  const normalizedCommands = commands.map((command) => command.toUpperCase())
+  if (!normalizedCommands.every((command) => VALID_COMMANDS.has(command))) {
+    return robots
+  }
+
+  let nextRobots = robots
+  try {
+    // Use the shared world helper so queue behavior matches the API.
+    for (const command of normalizedCommands) {
+      nextRobots = queueRobotCommand(nextRobots, id.toUpperCase(), command)
+    }
+  } catch (error) {
+    // Unknown robot IDs make this scenario command a no-op.
+    if (error instanceof RangeError) {
+      return robots
+    }
+    throw error
+  }
+
+  return nextRobots
+}
+
+// Format the current robots in the output shape required by scenario REPORT.
+function reportRobots(robots) {
+  if (robots.length === 0) {
+    return 'EMPTY'
+  }
+
+  // Compare numeric ID suffixes, so R2 sorts before R10.
+  return [...robots]
+    .sort(
+      (left, right) =>
+        Number(left.id.slice(1)) - Number(right.id.slice(1)),
+    )
+    .map(
+      (robot) =>
+        `${robot.id} ${robot.position.x},${robot.position.y},${robot.facing}`,
+    )
+    .join('\n')
+}
 
 export function runScenario(input) {
-  let floor = null
+  let floor = createFloor(5, 5)
+  let robots = []
+  let tickCount = 0
   const reports = []
 
+  // Process commands in order; each command updates the state used by later lines.
   for (const rawLine of input.split(/\r?\n/)) {
     const line = rawLine.trim()
 
+    // Comments and blank lines are intentionally ignored.
     if (line === '' || line.startsWith('#')) {
       continue
     }
 
+    // A valid FLOOR command starts a fresh simulation on the requested dimensions.
     const floorCommand = line.match(/^FLOOR\s+(\d+)\s*,\s*(\d+)$/i)
     if (floorCommand) {
       const width = Number(floorCommand[1])
@@ -22,15 +125,59 @@ export function runScenario(input) {
 
       if (validSize(width) && validSize(height)) {
         floor = createFloor(width, height)
+        robots = []
+        tickCount = 0
       }
-
       continue
     }
 
+    // PLACE supports explicit IDs and facings, unlike the UI's auto-ID placement.
+    const placeCommand = line.match(
+      /^PLACE\s+(R[1-9]\d*)\s+(\d+)\s*,\s*(\d+)\s*,\s*(NORTH|EAST|SOUTH|WEST)$/i,
+    )
+    if (placeCommand) {
+      robots = placeScenarioRobot(
+        floor,
+        robots,
+        placeCommand[1],
+        { x: Number(placeCommand[2]), y: Number(placeCommand[3]) },
+        placeCommand[4],
+      )
+      continue
+    }
+
+    // QUEUE accepts one or more commands for a robot that has already been placed.
+    const queueCommand = line.match(/^QUEUE\s+(R[1-9]\d*)\s+(.+)$/i)
+    if (queueCommand) {
+      robots = queueScenarioCommands(
+        robots,
+        queueCommand[1],
+        queueCommand[2].trim().split(/\s+/),
+      )
+      continue
+    }
+
+    // TICK defaults to one; each iteration uses the shared simultaneous tick engine.
+    const tickCommand = line.match(/^TICK(?:\s+(\d+))?$/i)
+    if (tickCommand) {
+      const numberOfTicks =
+        tickCommand[1] === undefined ? 1 : Number(tickCommand[1])
+      if (numberOfTicks > 0) {
+        for (let tick = 0; tick < numberOfTicks; tick += 1) {
+          const result = advanceTick(floor, robots)
+          robots = result.robots
+          tickCount += 1
+        }
+      }
+      continue
+    }
+
+    // Save a snapshot of the current robot report; the CLI prints these in order.
     if (/^REPORT$/i.test(line)) {
-      reports.push('EMPTY')
+      reports.push(reportRobots(robots))
     }
   }
 
-  return { floor: floor ?? createFloor(5, 5), reports }
+  // Return the final state as well as report output for tests and the CLI.
+  return { floor, robots, tickCount, reports }
 }

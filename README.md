@@ -34,19 +34,56 @@ npm.cmd run build
 
 ## Scenario runner
 
-The runner currently supports `FLOOR W,H` and `REPORT`. The floor defaults to
-5×5 when no `FLOOR` command is provided. Robot commands and ticks are not yet
-supported by the scenario runner.
+The runner currently supports `FLOOR W,H`, `PLACE`, `QUEUE`, `TICK`, and
+`REPORT`. The floor defaults to 5×5 when no `FLOOR` command is provided.
+Commands are run through the shared simulation engine. For example, the
+“A chain of robots moves together” scenario is:
 
 ```sh
-npm run scenario -- scenarios/floor-only.txt
+npm run scenario -- scenarios/chain-of-robots-move-together.txt
 ```
 
 Expected output:
 
 ```text
-EMPTY
+R1 1,0,EAST
+R2 2,0,EAST
+R3 3,0,EAST
 ```
+
+The “A head-on swap is blocked” scenario is also included:
+
+```sh
+npm run scenario -- scenarios/head-on-swap-blocked.txt
+```
+
+It reports both robots at their original positions. The “A contested cell, and
+a robot stuck behind the loser” scenario is also included:
+
+```sh
+npm run scenario -- scenarios/contested-cell-and-robot-stuck-behind-loser.txt
+```
+
+It reports `R1 1,1,EAST`, `R2 2,1,WEST`, and `R3 3,1,WEST`. `OBSTACLE` and the
+assessment's remaining scenario cases are not implemented yet.
+
+The four-robot rotation example is included as well:
+
+```sh
+npm run scenario -- scenarios/rotation-of-four-robots.txt
+```
+
+It reports `R1 0,1,NORTH`, `R2 1,1,EAST`, `R3 1,0,SOUTH`, and `R4 0,0,WEST`.
+
+The “Queues of different lengths” example includes two reports across multiple
+tick commands:
+
+```sh
+npm run scenario -- scenarios/queues-of-different-lengths.txt
+```
+
+It reports `R1 2,2,SOUTH` / `R2 1,1,EAST` after three ticks, then
+`R1 2,2,SOUTH` / `R2 3,1,EAST` after ten more ticks.
 
 The UI supports creating floors, placing robots, queueing `MOVE`, `LEFT`, and
 `RIGHT`, and stepping or playing the simulation. The NestJS API stores the
