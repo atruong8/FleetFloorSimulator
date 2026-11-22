@@ -14,8 +14,22 @@ import {
   toggleWorldCharger,
   toggleWorldObstacle,
 } from './services/worldApi.js'
+import CommandPanel from './components/CommandPanel.vue'
+import FloorDimensions from './components/FloorDimensions.vue'
+import FloorGrid from './components/FloorGrid.vue'
+import HistoryPanel from './components/HistoryPanel.vue'
+import RobotList from './components/RobotList.vue'
+import SimulationPanel from './components/SimulationPanel.vue'
 
 export default {
+  components: {
+    CommandPanel,
+    FloorDimensions,
+    FloorGrid,
+    HistoryPanel,
+    RobotList,
+    SimulationPanel,
+  },
   data() {
     const initialFloor = makeInitialFloor()
 
@@ -48,9 +62,6 @@ export default {
     window.removeEventListener('keydown', this.handleKeydown)
     this.pauseSimulation()
   },
-
-  // If the simulation is playing, it pauses and starts again so the next tick uses the new interval.
-  // If the simulation is paused, it does nothing; the new interval will apply when you press Play.
   watch: {
     tickIntervalMs() {
       if (this.isPlaying) {
@@ -72,30 +83,6 @@ export default {
           results: entry.payload.results,
         }))
         .reverse()
-    },
-    createCells() {
-      const positions = []
-
-      for (let y = this.floor.height - 1; y >= 0; y -= 1) {
-        for (let x = 0; x < this.floor.width; x += 1) {
-          positions.push({
-            x,
-            y,
-            robot: this.robots.find(
-              (robot) =>
-                robot.position.x === x && robot.position.y === y,
-            ),
-            obstacle: this.floor.obstacles.some(
-              (obstacle) => obstacle.x === x && obstacle.y === y,
-            ),
-            charger: this.floor.chargers.some(
-              (charger) => charger.x === x && charger.y === y,
-            ),
-          })
-        }
-      }
-
-      return positions
     },
   },
   methods: {
@@ -270,75 +257,6 @@ export default {
         this.obstacleMode = false
       }
     },
-    cellAriaLabel(cell) {
-      const location = `${cell.x}, ${cell.y}`
-
-      if (this.chargerMode) {
-        return `${cell.charger ? 'Remove' : 'Add'} charger at ${location}`
-      }
-
-      if (this.obstacleMode) {
-        if (cell.robot) {
-          return `${cell.robot.id} at ${location}. Cannot place an obstacle under a robot.`
-        }
-        return `${cell.obstacle ? 'Remove' : 'Add'} obstacle at ${location}`
-      }
-
-      if (cell.robot) {
-        return `${cell.robot.id} at ${location}, facing ${cell.robot.facing}. Click to select.`
-      }
-      if (cell.obstacle) {
-        return `Obstacle at ${location}. Enable obstacle edit mode to remove.`
-      }
-      return cell.charger
-        ? `Place robot at ${location}, on a charger`
-        : `Place robot at ${location}`
-    },
-    describeTickResult(result) {
-      const battery = result.battery === undefined
-        ? ''
-        : ` (battery ${result.battery})`
-
-      if (result.action === 'idle') {
-        return `${result.robotId}: idle${battery}`
-      }
-      if (result.action === 'turned') {
-        return `${result.robotId}: turned ${result.command}, now facing ${result.facing}${battery}`
-      }
-      if (result.action === 'moved') {
-        return `${result.robotId}: moved to (${result.to.x}, ${result.to.y})${battery}`
-      }
-
-      const blockedBy = result.blockedBy ? ` by ${result.blockedBy}` : ''
-      return `${result.robotId}: blocked (${result.reason}${blockedBy})${battery}`
-    },
-    describeHistoryEntry(entry) {
-      const { payload } = entry
-
-      if (entry.type === 'floor.created') {
-        return `Created a ${payload.width} × ${payload.height} floor.`
-      }
-      if (entry.type === 'robot.placed') {
-        return `${payload.robotId} placed at (${payload.position.x}, ${payload.position.y}).`
-      }
-      if (entry.type === 'robot.command_queued') {
-        return `${payload.command} queued for ${payload.robotId}.`
-      }
-      if (entry.type === 'obstacle.toggled') {
-        const change = payload.isObstacle ? 'added' : 'removed'
-        return `Obstacle ${change} at (${payload.position.x}, ${payload.position.y}).`
-      }
-      if (entry.type === 'charger.toggled') {
-        const change = payload.isCharger ? 'added' : 'removed'
-        return `Charger ${change} at (${payload.position.x}, ${payload.position.y}).`
-      }
-
-      const results = payload.results
-      const details = results.length
-        ? results.map((result) => this.describeTickResult(result)).join('; ')
-        : 'No robots to act.'
-      return `Tick ${entry.tick}: ${details}`
-    },
     handleKeydown(event) {
       const target = event.target
       if (
@@ -368,19 +286,6 @@ export default {
       event.preventDefault()
       this.queueCommand(command)
     },
-    facingArrow(facing) {
-      if (facing === 'NORTH') {
-        return '↑'
-      } else if (facing === 'EAST') {
-        return '→'
-      } else if (facing === 'SOUTH') {
-        return '↓'
-      } else if (facing === 'WEST') {
-        return '←'
-      }
-
-      return ''
-    },
   },
 }
 </script>
@@ -394,300 +299,61 @@ export default {
       <p v-if="isLoading" role="status">Loading saved simulation…</p>
     </header>
 
-    <section class="panel" aria-labelledby="dimensions-heading">
-      <h2 id="dimensions-heading">Floor dimensions</h2>
-      <form class="dimension-form" @submit.prevent="createFloorFromInputs">
-        <label class="dimension-field">
-          <span>Width</span>
-          <input
-            v-model.number="width"
-            type="number"
-            :min="minFloorSize"
-            :max="maxFloorSize"
-            step="1"
-            required
-            :disabled="!isReady || isSaving"
-          />
-        </label>
+    <FloorDimensions
+      :width="width"
+      :height="height"
+      :min-floor-size="minFloorSize"
+      :max-floor-size="maxFloorSize"
+      :error-message="errorMessage"
+      :is-ready="isReady"
+      :is-saving="isSaving"
+      :is-loading="isLoading"
+      @update:width="width = $event"
+      @update:height="height = $event"
+      @create-floor="createFloorFromInputs"
+      @retry="loadWorld"
+    />
 
-        <label class="dimension-field">
-          <span>Height</span>
-          <input
-            v-model.number="height"
-            type="number"
-            :min="minFloorSize"
-            :max="maxFloorSize"
-            step="1"
-            required
-            :disabled="!isReady || isSaving"
-          />
-        </label>
+    <FloorGrid
+      :floor="floor"
+      :robots="robots"
+      :selected-robot-id="selectedRobotId"
+      :obstacle-mode="obstacleMode"
+      :charger-mode="chargerMode"
+      :is-ready="isReady"
+      :is-saving="isSaving"
+      @cell-click="handleCellClick"
+      @toggle-obstacle-mode="toggleObstacleMode"
+      @toggle-charger-mode="toggleChargerMode"
+    />
 
-        <button type="submit" :disabled="!isReady || isSaving">
-          Create floor
-        </button>
-      </form>
+    <CommandPanel
+      :selected-robot="selectedRobot"
+      :is-ready="isReady"
+      :is-saving="isSaving"
+      @queue-command="queueCommand"
+    />
 
-      <p v-if="errorMessage" class="error-message" role="alert">
-        {{ errorMessage }}
-      </p>
-      <button
-        v-if="!isReady && !isLoading"
-        type="button"
-        @click="loadWorld"
-      >
-        Retry connection
-      </button>
-    </section>
+    <SimulationPanel
+      :tick-history="tickHistory"
+      :tick-count="tickCount"
+      :tick-interval-ms="tickIntervalMs"
+      :is-playing="isPlaying"
+      :is-ready="isReady"
+      :is-saving="isSaving"
+      @step="stepSimulation"
+      @toggle-playback="togglePlayback"
+      @interval-change="tickIntervalMs = $event"
+    />
 
-    <section class="panel floor-panel" aria-labelledby="floor-heading">
-      <div class="floor-header">
-        <h2 id="floor-heading">Floor</h2>
-        <p>{{ floor.width }} × {{ floor.height }}</p>
-      </div>
+    <HistoryPanel
+      :history="history"
+      :is-ready="isReady"
+      :is-saving="isSaving"
+      @clear-history="clearSimulationHistory"
+    />
 
-      <div class="floor-scroll">
-        <div class="floor-layout">
-          <div
-            class="axis y-axis"
-            :style="{ gridTemplateRows: `repeat(${floor.height}, 2rem)` }"
-            aria-hidden="true"
-          >
-            <span v-for="row in floor.height" :key="row">
-              {{ floor.height - row }}
-            </span>
-          </div>
-
-          <div class="grid-and-x-axis">
-            <div
-              class="floor-grid"
-              :style="{ gridTemplateColumns: `repeat(${floor.width}, 2rem)` }"
-              role="grid"
-              :aria-label="`${floor.width} by ${floor.height} floor grid`"
-            >
-              <button
-                v-for="cell in createCells"
-                :key="`${cell.x},${cell.y}`"
-                class="floor-cell"
-                :class="{
-                  'has-robot': cell.robot,
-                  'has-obstacle': cell.obstacle,
-                  'has-charger': cell.charger,
-                  selected: cell.robot?.id === selectedRobotId,
-                }"
-                :disabled="!isReady || isSaving"
-                role="gridcell"
-                :aria-label="cellAriaLabel(cell)"
-                :aria-pressed="cell.robot?.id === selectedRobotId"
-                @click="handleCellClick(cell)"
-              >
-                <span v-if="cell.charger" class="charger-marker" aria-hidden="true">
-                  C
-                </span>
-                <span v-if="cell.obstacle" aria-hidden="true">■</span>
-                <template v-else-if="cell.robot">
-                  <span>{{ cell.robot.id }}</span>
-                  <span class="robot-facing" aria-hidden="true">
-                    {{ facingArrow(cell.robot.facing) }}
-                  </span>
-                </template>
-              </button>
-            </div>
-
-            <div
-              class="axis x-axis"
-              :style="{ gridTemplateColumns: `repeat(${floor.width}, 2rem)` }"
-              aria-hidden="true"
-            >
-              <span v-for="column in floor.width" :key="column">
-                {{ column - 1 }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <p class="origin-note">Coordinates start at (0, 0) in the bottom-left.</p>
-      <div class="floor-edit-modes">
-        <button
-          type="button"
-          class="floor-mode-toggle"
-          :aria-pressed="obstacleMode"
-          :disabled="!isReady || isSaving"
-          @click="toggleObstacleMode"
-        >
-          Obstacle edit mode
-        </button>
-        <button
-          type="button"
-          class="floor-mode-toggle"
-          :aria-pressed="chargerMode"
-          :disabled="!isReady || isSaving"
-          @click="toggleChargerMode"
-        >
-          Charger edit mode
-        </button>
-        <p class="obstacle-mode-help" role="status">
-          {{
-            obstacleMode
-              ? 'On — click floor cells to add or remove obstacles. Turn this off to place robots.'
-              : chargerMode
-                ? 'On — click any floor cell to add or remove a charger (shown as C). Robots can enter chargers and gain 10 battery at tick end.'
-                : 'Off — clicking an empty cell places a robot. Turn on an edit mode to change floor cells.'
-          }}
-        </p>
-      </div>
-      <p v-if="selectedRobotId" class="selection-note" role="status">
-        Selected robot: {{ selectedRobotId }}
-      </p>
-    </section>
-
-    <section class="panel" aria-labelledby="commands-heading">
-      <h2 id="commands-heading">Queue commands</h2>
-      <p v-if="selectedRobot" class="commands-description">
-        Queue commands for {{ selectedRobot.id }}. Use the arrow keys or these
-        buttons: ↑ Move, ← Left, → Right.
-      </p>
-      <p v-else class="commands-description">
-        Select a robot on the floor to queue commands.
-      </p>
-      <div class="command-buttons">
-        <button
-          type="button"
-          :disabled="!selectedRobot || !isReady || isSaving"
-          @click="queueCommand('MOVE')"
-        >
-          ↑ Move
-        </button>
-        <button
-          type="button"
-          :disabled="!selectedRobot || !isReady || isSaving"
-          @click="queueCommand('LEFT')"
-        >
-          ← Left
-        </button>
-        <button
-          type="button"
-          :disabled="!selectedRobot || !isReady || isSaving"
-          @click="queueCommand('RIGHT')"
-        >
-          → Right
-        </button>
-      </div>
-      <p class="keyboard-note">
-        Arrow keys work when focus is outside a text or number field.
-      </p>
-    </section>
-
-    <section class="panel" aria-labelledby="ticks-heading">
-      <h2 id="ticks-heading">Simulation ticks</h2>
-      <div class="tick-controls">
-        <button
-          type="button"
-          :disabled="isPlaying || !isReady || isSaving"
-          @click="stepSimulation"
-        >
-          Step
-        </button>
-        <button
-          type="button"
-          :disabled="!isReady || isSaving"
-          @click="togglePlayback"
-        >
-          {{ isPlaying ? 'Pause' : 'Play' }}
-        </button>
-        <label class="interval-field">
-          <span>Tick interval (ms)</span>
-          <input
-            v-model.number="tickIntervalMs"
-            type="range"
-            min="100"
-            max="5000"
-            step="100"
-            :disabled="!isReady || isSaving"
-          />
-          <output>{{ tickIntervalMs }} ms</output>
-        </label>
-      </div>
-      <p class="tick-count" role="status">Current tick: {{ tickCount }}</p>
-
-      <div v-if="tickHistory.length" class="tick-history">
-        <h3>Tick results</h3>
-        <ol class="tick-list">
-          <li v-for="tick in tickHistory" :key="tick.id">
-            <h4>Tick {{ tick.number }}</h4>
-            <ul v-if="tick.results.length">
-              <li v-for="result in tick.results" :key="result.robotId">
-                {{ describeTickResult(result) }}
-              </li>
-            </ul>
-            <p v-else>No robots to act.</p>
-          </li>
-        </ol>
-      </div>
-      <p v-else class="commands-description">
-        Step the simulation to process the first queued command for each robot.
-      </p>
-    </section>
-
-    <section class="panel" aria-labelledby="history-heading">
-      <div class="history-header">
-        <h2 id="history-heading">Simulation history</h2>
-        <button
-          type="button"
-          :disabled="!isReady || isSaving || history.length === 0"
-          @click="clearSimulationHistory"
-        >
-          Clear history
-        </button>
-      </div>
-      <ol v-if="history.length" class="history-list">
-        <li
-          v-for="entry in history.slice().reverse()"
-          :key="entry.id"
-        >
-          <time :datetime="entry.createdAt">{{ entry.createdAt }}</time>
-          <span>{{ describeHistoryEntry(entry) }}</span>
-        </li>
-      </ol>
-      <p v-else class="commands-description">
-        Changes to the floor and simulation will appear here.
-      </p>
-    </section>
-
-    <section class="panel" aria-labelledby="robots-heading">
-      <h2 id="robots-heading">Robots and pending queues</h2>
-      <p v-if="robots.length === 0" class="commands-description">
-        No robots placed yet.
-      </p>
-      <ul v-else class="robot-list">
-        <li
-          v-for="robot in robots"
-          :key="robot.id"
-          class="robot-row"
-          :class="{ 'selected-robot-row': robot.id === selectedRobotId }"
-        >
-          <div>
-            <strong>{{ robot.id }}</strong>
-            <span class="robot-details">
-              ({{ robot.position.x }}, {{ robot.position.y }}) ·
-              {{ robot.facing }} · Battery: {{ robot.battery }}
-            </span>
-          </div>
-          <div class="queue-display">
-            <span class="queue-label">Queue:</span>
-            <span v-if="robot.queue.length === 0" class="empty-queue">
-              Empty
-            </span>
-            <ol v-else class="queue-items" :aria-label="`${robot.id} queue`">
-              <li v-for="(command, index) in robot.queue" :key="index">
-                {{ command }}
-              </li>
-            </ol>
-          </div>
-        </li>
-      </ul>
-    </section>
+    <RobotList :robots="robots" :selected-robot-id="selectedRobotId" />
   </main>
 </template>
 
@@ -729,9 +395,7 @@ input {
 
 .page-header h1,
 .page-header p,
-.panel h2,
-.floor-header p,
-.origin-note {
+.panel h2 {
   margin: 0;
 }
 
@@ -767,49 +431,6 @@ input {
   font-size: 1.1rem;
 }
 
-.dimension-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-.dimension-field {
-  display: grid;
-  gap: 0.4rem;
-  color: #465166;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.dimension-field input {
-  width: 7rem;
-  padding: 0.6rem 0.7rem;
-  border: 1px solid #cbd3df;
-  border-radius: 0.4rem;
-  color: #172033;
-}
-
-.interval-field {
-  display: grid;
-  gap: 0.4rem;
-  color: #465166;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.interval-field input {
-  width: min(14rem, 55vw);
-  accent-color: #4355b5;
-}
-
-.dimension-field input:focus-visible,
-button:focus-visible {
-  outline: 3px solid #9ca9f0;
-  outline-offset: 2px;
-}
-
 button {
   min-height: 2.55rem;
   padding: 0.6rem 1rem;
@@ -830,327 +451,13 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.error-message {
-  margin: 0.9rem 0 0;
-  color: #b42318;
+button:focus-visible {
+  outline: 3px solid #9ca9f0;
+  outline-offset: 2px;
 }
 
-.floor-panel {
-  padding-bottom: 1rem;
-}
-
-.floor-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.floor-header p,
-.origin-note {
-  color: #596579;
-  font-size: 0.9rem;
-}
-
-.floor-scroll {
-  overflow-x: auto;
-  padding: 0.25rem 0 0.5rem;
-}
-
-.floor-layout {
-  display: grid;
-  grid-template-columns: auto max-content;
-  align-items: start;
-  gap: 0.4rem;
-  width: max-content;
-}
-
-.axis {
-  display: grid;
-  color: #667085;
-  font-size: 0.75rem;
-  text-align: center;
-}
-
-.y-axis {
-  align-items: center;
-}
-
-.grid-and-x-axis {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.floor-grid {
-  display: grid;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid #cbd3df;
-  border-radius: 0.35rem;
-  background: #dce2eb;
-}
-
-.floor-cell {
-  position: relative;
-  display: flex;
-  min-height: 0;
-  width: 2rem;
-  height: 2rem;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  padding: 0;
-  border-radius: 0;
-  background: #fff;
-  color: #172033;
-  font-size: 0.55rem;
-  line-height: 1;
-}
-
-.floor-cell:hover {
-  background: #eef1ff;
-}
-
-.floor-cell.has-robot {
-  background: #dce5ff;
-  color: #263b91;
-  font-weight: 700;
-}
-
-.floor-cell.has-obstacle {
-  background: #465166;
-  color: #fff;
-}
-
-.floor-cell.selected {
-  box-shadow: inset 0 0 0 2px #4355b5;
-}
-
-.robot-facing {
-  font-size: 0.8rem;
-}
-
-.charger-marker {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  color: #a45b00;
-  font-size: 0.55rem;
-  line-height: 1;
-}
-
-.x-axis {
-  align-items: center;
-}
-
-.origin-note {
-  margin-top: 0.75rem;
-}
-
-.floor-edit-modes {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-}
-
-.floor-mode-toggle[aria-pressed="true"] {
-  background: #344594;
-}
-
-.floor-mode-toggle[aria-pressed="true"]:hover {
-  background: #293879;
-}
-
-.obstacle-mode-help {
-  margin: 0;
-  color: #465166;
-  font-size: 0.9rem;
-}
-
-.selection-note {
-  margin: 0.5rem 0 0;
-  color: #344594;
-  font-weight: 650;
-}
-
-.commands-description,
-.keyboard-note {
+.commands-description {
   margin: 0.75rem 0 0;
   color: #596579;
-}
-
-.command-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-top: 1rem;
-}
-
-.tick-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.tick-count {
-  margin: 0.9rem 0 0;
-  color: #344594;
-  font-weight: 650;
-}
-
-.tick-history {
-  margin-top: 1.25rem;
-}
-
-.tick-history h3,
-.tick-history h4 {
-  margin: 0;
-}
-
-.tick-list {
-  display: grid;
-  gap: 0.75rem;
-  max-height: 20rem;
-  overflow: auto;
-  margin: 0.75rem 0 0;
-  padding-left: 1.5rem;
-}
-
-.tick-list > li {
-  padding: 0.65rem;
-  border: 1px solid #dfe4ec;
-  border-radius: 0.4rem;
-}
-
-.tick-list ul {
-  display: grid;
-  gap: 0.25rem;
-  margin: 0.5rem 0 0;
-  padding-left: 1.25rem;
-  color: #465166;
-}
-
-.tick-list p {
-  margin: 0.5rem 0 0;
-  color: #667085;
-}
-
-.history-list {
-  display: grid;
-  gap: 0.6rem;
-  max-height: 24rem;
-  overflow: auto;
-  margin: 1rem 0 0;
-  padding-left: 1.5rem;
-}
-
-.history-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.history-header button {
-  min-height: 2.25rem;
-  padding: 0.45rem 0.8rem;
-  background: #596579;
-}
-
-.history-header button:hover {
-  background: #465166;
-}
-
-.history-header button:disabled {
-  background: #aab2c3;
-}
-
-.history-list li {
-  display: grid;
-  gap: 0.2rem;
-  padding: 0.65rem;
-  border: 1px solid #dfe4ec;
-  border-radius: 0.4rem;
-}
-
-.history-list time {
-  color: #667085;
-  font-size: 0.8rem;
-}
-
-.command-buttons button:disabled {
-  background: #aab2c3;
-  cursor: not-allowed;
-}
-
-.keyboard-note {
-  font-size: 0.85rem;
-}
-
-.robot-list {
-  display: grid;
-  gap: 0.65rem;
-  margin: 1rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.robot-row {
-  display: grid;
-  gap: 0.5rem;
-  padding: 0.8rem;
-  border: 1px solid #dfe4ec;
-  border-radius: 0.5rem;
-}
-
-.selected-robot-row {
-  border-color: #8391dd;
-  background: #f5f6ff;
-}
-
-.robot-details {
-  margin-left: 0.45rem;
-  color: #596579;
-  font-size: 0.9rem;
-}
-
-.queue-display {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.queue-label {
-  font-weight: 650;
-}
-
-.empty-queue {
-  color: #667085;
-}
-
-.queue-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.queue-items li {
-  padding: 0.2rem 0.45rem;
-  border-radius: 0.25rem;
-  background: #e9edff;
-  color: #344594;
-  font-family: ui-monospace, monospace;
-  font-size: 0.8rem;
 }
 </style>

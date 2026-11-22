@@ -390,8 +390,14 @@ export function advanceTick(floor, robots) {
     moveOutcomes,
   )
 
+  const rechargedRobots = rechargeRobotsOnChargers(
+    floor,
+    nextRobots,
+    results,
+  )
+
   return {
-    robots: rechargeRobotsOnChargers(floor, nextRobots, results),
+    robots: rechargedRobots,
     results,
   }
 }
