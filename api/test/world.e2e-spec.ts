@@ -201,6 +201,10 @@ describe('World API persistence (e2e)', () => {
       .post('/api/world/robots/R1/commands')
       .send({ command: 'GOTO', target: { x: -1, y: 0 } })
       .expect(400)
+    await request(app!.getHttpServer())
+      .post('/api/world/robots/R1/commands')
+      .send({ command: 'GOTO', target: { x: 1000, y: 1000 } })
+      .expect(400)
 
     let tickResponse
     for (let tick = 0; tick < 3; tick += 1) {

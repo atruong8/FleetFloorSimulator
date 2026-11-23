@@ -229,16 +229,20 @@ export class WorldService implements OnModuleDestroy {
           typeof target.y !== 'number' ||
           !Number.isInteger(target.x) ||
           !Number.isInteger(target.y) ||
-          target.x < 0 ||
-          target.y < 0
+          !isInsideFloor(current.floor, target as Position)
         ) {
           throw new BadRequestException(
-            'GOTO target must use non-negative integer coordinates',
+            'GOTO target must be within the floor bounds',
           )
         }
 
         const gotoTarget: Position = { x: target.x, y: target.y }
-        robots = queueRobotGoto(current.robots, robotId, gotoTarget)
+        robots = queueRobotGoto(
+          current.floor,
+          current.robots,
+          robotId,
+          gotoTarget,
+        )
         payload = { robotId, command, target: gotoTarget }
       } else if (isRobotCommand(command)) {
         robots = queueRobotCommand(current.robots, robotId, command)

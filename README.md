@@ -75,7 +75,9 @@ Module A's `GOTO` uses breadth-first search over four-directional floor cells.
 It recomputes the shortest path every tick, treating obstacles and other
 robots' tick-start cells as walls. Equal-length paths prefer NORTH, EAST,
 SOUTH, then WEST. If no path exists for three consecutive ticks, the command is
-dropped and the `UNREACHABLE` result is recorded in tick history. In the UI,
+dropped and the `UNREACHABLE` result is recorded in tick history. `GOTO`
+targets are rejected if they are outside the current floor or use invalid
+coordinates. In the UI,
 select a robot and Shift-click a cell to queue `GOTO`.
 Run the sample path around an obstacle with:
 

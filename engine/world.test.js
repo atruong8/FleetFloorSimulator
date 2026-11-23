@@ -114,13 +114,38 @@ test('findShortestPath routes around obstacles and treats other robots as walls'
 })
 
 test('queueRobotGoto appends a persistent target command', () => {
+  const floor = createFloor(3, 2)
   const robots = [createRobot('R1', { x: 0, y: 0 })]
 
-  const updatedRobots = queueRobotGoto(robots, 'R1', { x: 2, y: 1 })
+  const updatedRobots = queueRobotGoto(
+    floor,
+    robots,
+    'R1',
+    { x: 2, y: 1 },
+  )
 
   assert.deepEqual(updatedRobots[0].queue, [
     { type: 'GOTO', target: { x: 2, y: 1 }, noPathTicks: 0 },
   ])
+  assert.deepEqual(robots[0].queue, [])
+})
+
+test('queueRobotGoto rejects targets outside the current floor', () => {
+  const floor = createFloor(3, 2)
+  const robots = [createRobot('R1', { x: 0, y: 0 })]
+
+  assert.throws(
+    () => queueRobotGoto(floor, robots, 'R1', { x: 3, y: 1 }),
+    /within the floor bounds/,
+  )
+  assert.throws(
+    () => queueRobotGoto(floor, robots, 'R1', { x: 2, y: 2 }),
+    /within the floor bounds/,
+  )
+  assert.throws(
+    () => queueRobotGoto(floor, robots, 'R1', { x: 1000, y: 1000 }),
+    /within the floor bounds/,
+  )
   assert.deepEqual(robots[0].queue, [])
 })
 

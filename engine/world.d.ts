@@ -52,6 +52,7 @@ export declare function queueRobotCommand(
 ): Robot[]
 
 export declare function queueRobotGoto(
+  floor: Floor,
   robots: Robot[],
   robotId: string,
   target: Position,

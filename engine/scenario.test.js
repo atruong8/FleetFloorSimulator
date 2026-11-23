@@ -183,6 +183,16 @@ REPORT`)
   assert.deepEqual(result.reports, ['R1 0,0,EAST'])
 })
 
+test('an out-of-bounds GOTO target is ignored by the scenario runner', () => {
+  const result = runScenario(`FLOOR 3,2
+PLACE R1 0,0,EAST
+QUEUE R1 GOTO 1000,1000 LEFT
+REPORT`)
+
+  assert.deepEqual(result.robots[0].queue, [])
+  assert.deepEqual(result.reports, ['R1 0,0,EAST'])
+})
+
 test('scenario defaults to a 5 by 5 floor and ignores blank and comment lines', () => {
   const result = runScenario('\n# default floor\n\nreport\n')
 

@@ -179,15 +179,16 @@ export function queueRobotCommand(robots, robotId, command) {
   )
 }
 
-export function queueRobotGoto(robots, robotId, target) {
+export function queueRobotGoto(floor, robots, robotId, target) {
   if (
     !target ||
     !Number.isInteger(target.x) ||
     !Number.isInteger(target.y) ||
-    target.x < 0 ||
-    target.y < 0
+    !isInsideFloor(floor, target)
   ) {
-    throw new RangeError('GOTO target must use non-negative integer coordinates')
+    throw new RangeError(
+      'GOTO target must be within the floor bounds',
+    )
   }
 
   const robotIndex = robots.findIndex((robot) => robot.id === robotId)

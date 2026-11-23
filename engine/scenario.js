@@ -16,7 +16,7 @@ const VALID_COMMANDS = new Set(['MOVE', 'LEFT', 'RIGHT'])
 
 // Validate the full command list first so an invalid line cannot queue only part of it.
 // Such as "QUEUE R1 MOVE GOTO 1,2 LEFT".
-function queueScenarioCommands(robots, id, commandText) {
+function queueScenarioCommands(floor, robots, id, commandText) {
   const tokens = commandText.trim().split(/\s+/)
   const commands = []
 
@@ -46,7 +46,12 @@ function queueScenarioCommands(robots, id, commandText) {
       nextRobots =
         typeof command === 'string'
           ? queueRobotCommand(nextRobots, id.toUpperCase(), command)
-          : queueRobotGoto(nextRobots, id.toUpperCase(), command.target)
+          : queueRobotGoto(
+              floor,
+              nextRobots,
+              id.toUpperCase(),
+              command.target,
+            )
     }
   } catch (error) {
     // Unknown robot IDs make this scenario command a no-op.
@@ -165,6 +170,7 @@ export function runScenario(input) {
     const queueCommand = line.match(/^QUEUE\s+(R[1-9]\d*)\s+(.+)$/i)
     if (queueCommand) {
       robots = queueScenarioCommands(
+        floor,
         robots,
         queueCommand[1],
         queueCommand[2],
