@@ -148,3 +148,10 @@ robots, queues, and tick count.
 
 Robots start with 100 battery, and successful moves consume one. A robot at
 zero battery cannot move.
+
+## Why the modules
+
+- The reason I picked module A and B was because compared to C and D it's not as expensive and difficult.
+- Modules A and B makese the most sense to implement within the current engine. Module A is purely algorithms but it's confined within the floor space. So nothing can really grow. Module B is just another tracker for robots and another feature to the floor. We already have obstacles as part of the core engine so a charger is treated similarly and we already track a robots queue, so tracking the battery should be in the same realm.  
+- Module C invovles saving all previous states and rebuilding them. Also forking and creating independent floor with identical histories. This will easily grow and memory would eventually run out. The more memory and forking, performance will decrease and things will be slower be cause of always storing entire sessions and being able to restore them. Wouldn't make sense for a smaller assesment like a fleet simulator
+- Module D involves real time with multiple users. With real time and multiple users, there will need to be some lock  management when other users are making the same api calls at the same time. There are potential race conditions to consider due to concurrency nature. Data can be out of synced or incorrect.
