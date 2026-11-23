@@ -52,10 +52,19 @@ export default {
       }
 
       if (cell.robot) {
-        return `${cell.robot.id} at ${location}, facing ${cell.robot.facing}. Click to select.`
+        const selection = this.selectedRobotId
+          ? ` Shift-click to queue GOTO for ${this.selectedRobotId} to this cell.`
+          : ''
+        return `${cell.robot.id} at ${location}, facing ${cell.robot.facing}. Click to select.${selection}`
       }
       if (cell.obstacle) {
-        return `Obstacle at ${location}. Enable obstacle edit mode to remove.`
+        const goto = this.selectedRobotId
+          ? ` Shift-click to queue GOTO for ${this.selectedRobotId} to this cell.`
+          : ''
+        return `Obstacle at ${location}. Enable obstacle edit mode to remove.${goto}`
+      }
+      if (this.selectedRobotId) {
+        return `Queue GOTO for ${this.selectedRobotId} to ${location} with Shift-click, or place a robot`
       }
       return cell.charger
         ? `Place robot at ${location}, on a charger`
@@ -118,7 +127,7 @@ export default {
               role="gridcell"
               :aria-label="cellAriaLabel(cell)"
               :aria-pressed="cell.robot?.id === selectedRobotId"
-              @click="$emit('cell-click', cell)"
+              @click="$emit('cell-click', { cell, shiftKey: $event.shiftKey })"
             >
               <span v-if="cell.charger" class="charger-marker" aria-hidden="true">
                 C
@@ -147,6 +156,9 @@ export default {
     </div>
 
     <p class="origin-note">Coordinates start at (0, 0) in the bottom-left.</p>
+    <p class="grid-help">
+      Select a robot, then Shift-click a cell to queue GOTO to that location.
+    </p>
     <div class="floor-edit-modes">
       <button
         type="button"
@@ -299,6 +311,12 @@ export default {
 
 .origin-note {
   margin-top: 0.75rem;
+}
+
+.grid-help {
+  margin: 0.5rem 0 0;
+  color: #596579;
+  font-size: 0.9rem;
 }
 
 .floor-edit-modes {

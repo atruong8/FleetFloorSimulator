@@ -162,6 +162,27 @@ CHARGER 2,0`)
   assert.deepEqual(result.floor.chargers, [{ x: 0, y: 0 }])
 })
 
+test('QUEUE supports GOTO and following commands in the scenario runner', () => {
+  const result = runScenario(`FLOOR 3,2
+PLACE R1 0,0,EAST
+QUEUE R1 GOTO 2,1 LEFT
+TICK 3
+REPORT
+REPORT BATTERY`)
+
+  assert.deepEqual(result.reports, ['R1 2,1,EAST', 'R1 97'])
+  assert.deepEqual(result.robots[0].queue, ['LEFT'])
+})
+
+test('an invalid GOTO token prevents partial scenario queue updates', () => {
+  const result = runScenario(`PLACE R1 0,0,EAST
+QUEUE R1 MOVE GOTO invalid
+REPORT`)
+
+  assert.deepEqual(result.robots[0].queue, [])
+  assert.deepEqual(result.reports, ['R1 0,0,EAST'])
+})
+
 test('scenario defaults to a 5 by 5 floor and ignores blank and comment lines', () => {
   const result = runScenario('\n# default floor\n\nreport\n')
 

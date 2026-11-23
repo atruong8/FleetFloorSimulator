@@ -11,6 +11,15 @@ export function describeTickResult(result) {
   if (result.action === 'moved') {
     return `${result.robotId}: moved to (${result.to.x}, ${result.to.y})${battery}`
   }
+  if (result.action === 'waiting') {
+    return `${result.robotId}: waiting; no path to (${result.target.x}, ${result.target.y})`
+  }
+  if (result.action === 'arrived') {
+    return `${result.robotId}: arrived at (${result.target.x}, ${result.target.y})`
+  }
+  if (result.action === 'unreachable') {
+    return `${result.robotId}: GOTO unreachable at (${result.target.x}, ${result.target.y})`
+  }
 
   const blockedBy = result.blockedBy ? ` by ${result.blockedBy}` : ''
   return `${result.robotId}: blocked (${result.reason}${blockedBy})${battery}`

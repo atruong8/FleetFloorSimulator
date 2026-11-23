@@ -2,6 +2,12 @@ import { isInsideFloor } from './floor.js'
 import { createRobot } from './robot.js'
 
 const ROBOT_COMMANDS = new Set(['MOVE', 'LEFT', 'RIGHT'])
+const PATH_DIRECTIONS = [
+  { facing: 'NORTH', x: 0, y: 1 },
+  { facing: 'EAST', x: 1, y: 0 },
+  { facing: 'SOUTH', x: 0, y: -1 },
+  { facing: 'WEST', x: -1, y: 0 },
+]
 const TURNED_FACING = {
   NORTH: { LEFT: 'WEST', RIGHT: 'EAST' },
   EAST: { LEFT: 'NORTH', RIGHT: 'SOUTH' },
@@ -30,6 +36,96 @@ function nextPosition(robot) {
     x: robot.position.x + offset.x,
     y: robot.position.y + offset.y,
   }
+}
+
+// Find a shortest route with BFS. Neighbor order makes equal-length paths prefer
+// NORTH, then EAST, SOUTH, and WEST as required by the GOTO rules.
+export function findShortestPath(floor, robots, robot, target) {
+  // Reject targets and starting cells that are outside the floor.
+  if (!isInsideFloor(floor, robot.position) || !isInsideFloor(floor, target)) {
+    return null
+  }
+
+  // Arriving at the target requires no movement; this completes GOTO.
+  if (positionKey(robot.position) === positionKey(target)) {
+    return []
+  }
+
+  // BFS cannot enter obstacles or cells occupied by a different robot.
+  const isBlocked = (position) =>
+    floor.obstacles.some(
+      (obstacle) =>
+        obstacle.x === position.x && obstacle.y === position.y,
+    ) ||
+    robots.some(
+      (otherRobot) =>
+        otherRobot.id !== robot.id &&
+        otherRobot.position.x === position.x &&
+        otherRobot.position.y === position.y,
+    )
+
+  // Track the current cell and target as string keys for Set and Map lookups.
+  const startKey = positionKey(robot.position)
+  const targetKey = positionKey(target)
+
+  // Queue contains frontier cells; BFS explores one cell at a time in tick order.
+  const queue = [{ ...robot.position }]
+
+  // Visited prevents cycles and ensures every cell is reached by a shortest route.
+  const visited = new Set([startKey])
+
+  // Previous cells let us reconstruct the route after the target is discovered.
+  const previousByPosition = new Map([[startKey, null]])
+  const positionByKey = new Map([[startKey, { ...robot.position }]])
+
+  // Use an index instead of shifting the array so each BFS visit is constant time.
+  for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+    const current = queue[queueIndex]
+    const currentKey = positionKey(current)
+
+    // The fixed direction order implements NORTH, EAST, SOUTH, WEST tie-breaking.
+    for (const direction of PATH_DIRECTIONS) {
+      const next = {
+        x: current.x + direction.x,
+        y: current.y + direction.y,
+      }
+      const nextKey = positionKey(next)
+
+      // Ignore walls, obstacles, occupied cells, and cells already visited.
+      if (
+        visited.has(nextKey) ||
+        !isInsideFloor(floor, next) ||
+        isBlocked(next)
+      ) {
+        continue
+      }
+
+      // Remember this route so it can be reconstructed when the target is found.
+      visited.add(nextKey)
+      previousByPosition.set(nextKey, currentKey)
+      positionByKey.set(nextKey, next)
+
+      if (nextKey === targetKey) {
+        const path = []
+        let pathKey = targetKey
+
+        // Walk backward from the target until reaching the robot's start cell.
+        while (pathKey !== startKey) {
+          path.push(positionByKey.get(pathKey))
+          pathKey = previousByPosition.get(pathKey)
+        }
+
+        // Reverse the backward route so it is ordered from robot to target.
+        return path.reverse()
+      }
+
+      // Add the discovered cell to the BFS frontier for later exploration.
+      queue.push(next)
+    }
+  }
+
+  // Exhausting the frontier means there is no route to the target.
+  return null
 }
 
 export function placeRobot(floor, robots, position) {
@@ -83,6 +179,35 @@ export function queueRobotCommand(robots, robotId, command) {
   )
 }
 
+export function queueRobotGoto(robots, robotId, target) {
+  if (
+    !target ||
+    !Number.isInteger(target.x) ||
+    !Number.isInteger(target.y) ||
+    target.x < 0 ||
+    target.y < 0
+  ) {
+    throw new RangeError('GOTO target must use non-negative integer coordinates')
+  }
+
+  const robotIndex = robots.findIndex((robot) => robot.id === robotId)
+  if (robotIndex === -1) {
+    throw new RangeError(`Robot ${robotId} does not exist`)
+  }
+
+  const gotoCommand = {
+    type: 'GOTO',
+    target: { x: target.x, y: target.y },
+    noPathTicks: 0,
+  }
+
+  return robots.map((robot, index) =>
+    index === robotIndex
+      ? { ...robot, queue: [...robot.queue, gotoCommand] }
+      : robot,
+  )
+}
+
 // Consume one command per robot, applying turns and preparing move proposals.
 function prepareTick(floor, robots) {
   // Build a separate next-state so every move is planned from the same snapshot.
@@ -93,11 +218,12 @@ function prepareTick(floor, robots) {
 
   for (const robot of robots) {
     const command = robot.queue[0]
+    const isGoto = typeof command === 'object' && command?.type === 'GOTO'
     const nextRobot = {
       ...robot,
       position: { ...robot.position },
-      // Taking the command here consumes it even if its MOVE is later blocked.
-      queue: command ? robot.queue.slice(1) : robot.queue,
+      // GOTO stays at the queue front until arrival or three no-path ticks.
+      queue: command && !isGoto ? robot.queue.slice(1) : robot.queue,
     }
 
     nextRobots.push(nextRobot)
@@ -108,6 +234,90 @@ function prepareTick(floor, robots) {
         action: 'idle',
         position: { ...robot.position },
       })
+      continue
+    }
+
+    if (isGoto) {
+      const path = findShortestPath(
+        floor,
+        robots,
+        robot,
+        command.target,
+      )
+
+      if (path === null) {
+        const noPathTicks = command.noPathTicks + 1
+        if (noPathTicks >= 3) {
+          nextRobot.queue = robot.queue.slice(1)
+          results.push({
+            robotId: robot.id,
+            action: 'unreachable',
+            command: 'GOTO',
+            target: { ...command.target },
+            reason: 'UNREACHABLE',
+            position: { ...robot.position },
+          })
+        } else {
+          nextRobot.queue = [
+            { ...command, noPathTicks },
+            ...robot.queue.slice(1),
+          ]
+          results.push({
+            robotId: robot.id,
+            action: 'waiting',
+            command: 'GOTO',
+            target: { ...command.target },
+            reason: 'NO_PATH',
+            position: { ...robot.position },
+          })
+        }
+        nextRobots[nextRobots.length - 1] = nextRobot
+        continue
+      }
+
+      if (path.length === 0) {
+        nextRobot.queue = robot.queue.slice(1)
+        results.push({
+          robotId: robot.id,
+          action: 'arrived',
+          command: 'GOTO',
+          target: { ...command.target },
+          position: { ...robot.position },
+        })
+        nextRobots[nextRobots.length - 1] = nextRobot
+        continue
+      }
+
+      const destination = path[0]
+      const direction = PATH_DIRECTIONS.find(
+        (candidate) =>
+          robot.position.x + candidate.x === destination.x &&
+          robot.position.y + candidate.y === destination.y,
+      )
+      nextRobot.facing = direction.facing
+      nextRobot.queue = [
+        { ...command, noPathTicks: 0 },
+        ...robot.queue.slice(1),
+      ]
+      movePlans.set(robot.id, {
+        robot,
+        destination,
+        gotoTarget: command.target,
+      })
+
+      if (robot.battery <= 0) {
+        blockedMoves.set(robot.id, { reason: 'NO_BATTERY' })
+      }
+
+      results.push({
+        robotId: robot.id,
+        action: 'pending',
+        command: 'GOTO',
+        target: { ...command.target },
+        from: { ...robot.position },
+        to: destination,
+      })
+      nextRobots[nextRobots.length - 1] = nextRobot
       continue
     }
 
@@ -335,6 +545,12 @@ function applyMoveOutcomes(
     // Blocked moves never reach this branch, so only successful moves consume battery.
     nextRobot.battery -= 1
     result.action = 'moved'
+    if (
+      plan.gotoTarget &&
+      positionKey(plan.destination) === positionKey(plan.gotoTarget)
+    ) {
+      nextRobot.queue = nextRobot.queue.slice(1)
+    }
   }
 }
 

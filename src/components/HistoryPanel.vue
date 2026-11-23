@@ -19,6 +19,9 @@ export default {
         return `${payload.robotId} placed at (${payload.position.x}, ${payload.position.y}).`
       }
       if (entry.type === 'robot.command_queued') {
+        if (payload.command === 'GOTO') {
+          return `GOTO ${payload.target.x},${payload.target.y} queued for ${payload.robotId}.`
+        }
         return `${payload.command} queued for ${payload.robotId}.`
       }
       if (entry.type === 'obstacle.toggled') {

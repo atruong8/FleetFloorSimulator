@@ -55,6 +55,13 @@ export function queueWorldCommand(robotId, command) {
   })
 }
 
+export function queueWorldGoto(robotId, target) {
+  return requestWorld(`/robots/${encodeURIComponent(robotId)}/commands`, {
+    method: 'POST',
+    body: { command: 'GOTO', target },
+  })
+}
+
 export function toggleWorldObstacle(position) {
   return requestWorld('/obstacles', { method: 'POST', body: position })
 }

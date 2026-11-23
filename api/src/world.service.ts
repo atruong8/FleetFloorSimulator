@@ -13,12 +13,10 @@ import {
   advanceTick as runTick,
   placeRobot as addRobot,
   queueRobotCommand,
+  queueRobotGoto,
 } from '../../engine/world.js'
 import type { Floor, Position } from '../../engine/floor.js'
-import type {
-  Robot,
-  RobotCommand,
-} from '../../engine/world.js'
+import type { Robot, RobotMoveCommand } from '../../engine/world.js'
 
 interface WorldSnapshot {
   floor: Floor
@@ -35,7 +33,7 @@ type WorldEventType =
   | 'charger.toggled'
   | 'tick.completed'
 
-function isRobotCommand(command: unknown): command is RobotCommand {
+function isRobotCommand(command: unknown): command is RobotMoveCommand {
   return (
     typeof command === 'string' &&
     (command === 'MOVE' || command === 'LEFT' || command === 'RIGHT')
@@ -213,21 +211,43 @@ export class WorldService implements OnModuleDestroy {
     )
   }
 
-  queueCommand(robotId: string, command: unknown): WorldResponse {
-    if (!isRobotCommand(command)) {
-      throw new BadRequestException('Command must be MOVE, LEFT, or RIGHT')
-    }
-
+  queueCommand(
+    robotId: string,
+    command: unknown,
+    target?: Partial<Position>,
+  ): WorldResponse {
     const current = this.readSnapshot()
     let robots: Robot[]
+    let payload: Record<string, unknown>
 
     // The engine also checks that the robot exists before adding its command.
     try {
-      robots = queueRobotCommand(
-        current.robots,
-        robotId,
-        command,
-      )
+      if (command === 'GOTO') {
+        if (
+          !target ||
+          typeof target.x !== 'number' ||
+          typeof target.y !== 'number' ||
+          !Number.isInteger(target.x) ||
+          !Number.isInteger(target.y) ||
+          target.x < 0 ||
+          target.y < 0
+        ) {
+          throw new BadRequestException(
+            'GOTO target must use non-negative integer coordinates',
+          )
+        }
+
+        const gotoTarget: Position = { x: target.x, y: target.y }
+        robots = queueRobotGoto(current.robots, robotId, gotoTarget)
+        payload = { robotId, command, target: gotoTarget }
+      } else if (isRobotCommand(command)) {
+        robots = queueRobotCommand(current.robots, robotId, command)
+        payload = { robotId, command }
+      } else {
+        throw new BadRequestException(
+          'Command must be MOVE, LEFT, RIGHT, or GOTO',
+        )
+      }
     } catch (error) {
       if (error instanceof RangeError) {
         throw new BadRequestException(error.message)
@@ -238,7 +258,7 @@ export class WorldService implements OnModuleDestroy {
     return this.recordChange(
       { ...current, robots },
       'robot.command_queued',
-      { robotId, command },
+      payload,
     )
   }
 

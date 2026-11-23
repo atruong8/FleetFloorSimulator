@@ -4,6 +4,13 @@ export default {
     robots: { type: Array, required: true },
     selectedRobotId: { type: String, default: null },
   },
+  methods: {
+    commandLabel(command) {
+      return typeof command === 'string'
+        ? command
+        : `GOTO ${command.target.x},${command.target.y}`
+    },
+  },
 }
 </script>
 
@@ -34,7 +41,7 @@ export default {
           </span>
           <ol v-else class="queue-items" :aria-label="`${robot.id} queue`">
             <li v-for="(command, index) in robot.queue" :key="index">
-              {{ command }}
+              {{ commandLabel(command) }}
             </li>
           </ol>
         </div>

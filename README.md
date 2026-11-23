@@ -35,8 +35,9 @@ npm.cmd run build
 ## Scenario runner
 
 The runner currently supports `FLOOR W,H`, `OBSTACLE X,Y`, `CHARGER X,Y`,
-`PLACE`, `QUEUE`, `TICK`, `REPORT`, and `REPORT BATTERY`. The floor defaults
-to 5×5 when no `FLOOR` command is provided.
+`PLACE`, `QUEUE` (including `GOTO X,Y`), `TICK`, `REPORT`, and
+`REPORT BATTERY`. The floor defaults to 5×5 when no `FLOOR` command is
+provided.
 Commands are run through the shared simulation engine. For example, the
 “A chain of robots moves together” scenario is:
 
@@ -67,7 +68,22 @@ npm run scenario -- scenarios/contested-cell-and-robot-stuck-behind-loser.txt
 
 It reports `R1 1,1,EAST`, `R2 2,1,WEST`, and `R3 3,1,WEST`. All five core
 scenario examples from the assessment are included; module-specific scenario
-commands such as `GOTO` are not implemented.
+commands such as timeline forks and real-time multi-user updates are not
+implemented.
+
+Module A's `GOTO` uses breadth-first search over four-directional floor cells.
+It recomputes the shortest path every tick, treating obstacles and other
+robots' tick-start cells as walls. Equal-length paths prefer NORTH, EAST,
+SOUTH, then WEST. If no path exists for three consecutive ticks, the command is
+dropped and the `UNREACHABLE` result is recorded in tick history. In the UI,
+select a robot and Shift-click a cell to queue `GOTO`.
+Run the sample path around an obstacle with:
+
+```sh
+npm run scenario -- scenarios/goto-shortest-path.txt
+```
+
+It reports `R1 4,0,SOUTH`.
 
 The four-robot rotation example is included as well:
 
@@ -115,8 +131,12 @@ Chargers do not block movement. Each robot ending a tick on a charger gains 10
 battery, up to 100. In the UI, enable **Charger edit mode** and click any cell
 to add or remove a charger; turn edit mode off to place robots.
 
-The UI supports creating floors, placing robots, queueing `MOVE`, `LEFT`, and
-`RIGHT`, and stepping or playing the simulation. The NestJS API stores the
+The selected depth modules are **A (Pathfinding)** and **B (Battery and
+chargers)**. Pathfinding reuses the shared tick resolver, and the battery
+module adds an independent floor-cell type plus battery accounting.
+
+The UI supports creating floors, placing robots, queueing `MOVE`, `LEFT`,
+`RIGHT`, and `GOTO`, and stepping or playing the simulation. The NestJS API stores the
 current world snapshot and an event history in SQLite. The UI loads
 the saved world when opened and records floor creation, robot placement,
 queued commands, obstacle and charger changes, and completed ticks. Starting a new floor

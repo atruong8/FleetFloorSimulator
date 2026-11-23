@@ -1,6 +1,12 @@
 import type { Floor, Position } from './floor.js'
 
-export type RobotCommand = 'MOVE' | 'LEFT' | 'RIGHT'
+export type RobotMoveCommand = 'MOVE' | 'LEFT' | 'RIGHT'
+export interface GotoCommand {
+  type: 'GOTO'
+  target: Position
+  noPathTicks: number
+}
+export type RobotCommand = RobotMoveCommand | GotoCommand
 export type Facing = 'NORTH' | 'EAST' | 'SOUTH' | 'WEST'
 
 export interface Robot {
@@ -13,8 +19,15 @@ export interface Robot {
 
 export interface TickResult {
   robotId: string
-  action: 'idle' | 'turned' | 'moved' | 'blocked'
-  command?: RobotCommand
+  action:
+    | 'idle'
+    | 'turned'
+    | 'moved'
+    | 'blocked'
+    | 'waiting'
+    | 'arrived'
+    | 'unreachable'
+  command?: RobotMoveCommand | 'GOTO'
   from?: Position
   to?: Position
   position?: Position
@@ -23,6 +36,7 @@ export interface TickResult {
   reason?: string
   blockedBy?: string
   battery?: number
+  target?: Position
 }
 
 export declare function placeRobot(
@@ -34,8 +48,20 @@ export declare function placeRobot(
 export declare function queueRobotCommand(
   robots: Robot[],
   robotId: string,
-  command: RobotCommand,
+  command: RobotMoveCommand,
 ): Robot[]
+
+export declare function queueRobotGoto(
+  robots: Robot[],
+  robotId: string,
+  target: Position,
+): Robot[]
+export declare function findShortestPath(
+  floor: Floor,
+  robots: Robot[],
+  robot: Robot,
+  target: Position,
+): Position[] | null
 
 export declare function advanceTick(
   floor: Floor,

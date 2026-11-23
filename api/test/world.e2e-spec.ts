@@ -180,6 +180,66 @@ describe('World API persistence (e2e)', () => {
     ).toHaveLength(2)
   })
 
+  it('queues GOTO, runs it through the shared engine, and records UNREACHABLE', async () => {
+    await request(app!.getHttpServer())
+      .post('/api/world/floor')
+      .send({ width: 3, height: 2 })
+      .expect(201)
+    await request(app!.getHttpServer())
+      .post('/api/world/robots')
+      .send({ x: 0, y: 0 })
+      .expect(201)
+
+    const queuedResponse = await request(app!.getHttpServer())
+      .post('/api/world/robots/R1/commands')
+      .send({ command: 'GOTO', target: { x: 2, y: 1 } })
+      .expect(201)
+    expect(queuedResponse.body.robots[0].queue).toEqual([
+      { type: 'GOTO', target: { x: 2, y: 1 }, noPathTicks: 0 },
+    ])
+    await request(app!.getHttpServer())
+      .post('/api/world/robots/R1/commands')
+      .send({ command: 'GOTO', target: { x: -1, y: 0 } })
+      .expect(400)
+
+    let tickResponse
+    for (let tick = 0; tick < 3; tick += 1) {
+      tickResponse = await request(app!.getHttpServer())
+        .post('/api/world/tick')
+        .expect(201)
+    }
+    expect(tickResponse.body.robots[0].position).toEqual({ x: 2, y: 1 })
+    expect(tickResponse.body.robots[0].queue).toEqual([])
+
+    await request(app!.getHttpServer())
+      .post('/api/world/floor')
+      .send({ width: 3, height: 1 })
+      .expect(201)
+    await request(app!.getHttpServer())
+      .post('/api/world/robots')
+      .send({ x: 0, y: 0 })
+      .expect(201)
+    await request(app!.getHttpServer())
+      .post('/api/world/obstacles')
+      .send({ x: 1, y: 0 })
+      .expect(201)
+    await request(app!.getHttpServer())
+      .post('/api/world/robots/R1/commands')
+      .send({ command: 'GOTO', target: { x: 2, y: 0 } })
+      .expect(201)
+
+    for (let tick = 0; tick < 3; tick += 1) {
+      tickResponse = await request(app!.getHttpServer())
+        .post('/api/world/tick')
+        .expect(201)
+    }
+    const unreachableResult =
+      tickResponse.body.history.at(-1).payload.results[0]
+    expect(unreachableResult.action).toBe('unreachable')
+    expect(unreachableResult.reason).toBe('UNREACHABLE')
+    expect(tickResponse.body.robots[0].queue).toEqual([])
+  })
+
   it('clears history without changing the saved world', async () => {
     await request(app!.getHttpServer())
       .post('/api/world/floor')

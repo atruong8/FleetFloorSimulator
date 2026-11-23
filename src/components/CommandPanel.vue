@@ -14,10 +14,11 @@ export default {
     <h2 id="commands-heading">Command Panel</h2>
     <p v-if="selectedRobot" class="commands-description">
       Queue commands for {{ selectedRobot.id }}. Use the arrow keys or these
-      buttons: ↑ Move, ← Left, → Right.
+      buttons: ↑ Move, ← Left, → Right. Shift-click a floor cell to queue GOTO.
     </p>
     <p v-else class="commands-description">
-      Select a robot on the floor to queue commands.
+      Select a robot on the floor to queue commands, then Shift-click a cell to
+      queue GOTO.
     </p>
     <div class="command-buttons">
       <button

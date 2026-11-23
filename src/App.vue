@@ -11,6 +11,7 @@ import {
   getWorld,
   placeWorldRobot,
   queueWorldCommand,
+  queueWorldGoto,
   toggleWorldCharger,
   toggleWorldObstacle,
 } from './services/worldApi.js'
@@ -158,7 +159,7 @@ export default {
       this.pauseSimulation()
       return this.saveWorldChange(() => createFloor(this.width, this.height))
     },
-    async handleCellClick(cell) {
+    async handleCellClick({ cell, shiftKey }) {
       this.errorMessage = ''
 
       if (this.obstacleMode) {
@@ -173,6 +174,13 @@ export default {
 
       if (this.chargerMode) {
         await this.saveWorldChange(() => toggleWorldCharger(cell))
+        return
+      }
+
+      if (shiftKey && this.selectedRobotId) {
+        await this.saveWorldChange(() =>
+          queueWorldGoto(this.selectedRobotId, cell),
+        )
         return
       }
 

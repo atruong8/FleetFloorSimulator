@@ -6,22 +6,47 @@ import {
   MIN_FLOOR_SIZE,
 } from './floor.js'
 import { placeScenarioRobot } from './robot.js'
-import { advanceTick, queueRobotCommand } from './world.js'
+import {
+  advanceTick,
+  queueRobotCommand,
+  queueRobotGoto,
+} from './world.js'
 
 const VALID_COMMANDS = new Set(['MOVE', 'LEFT', 'RIGHT'])
 
 // Validate the full command list first so an invalid line cannot queue only part of it.
-function queueScenarioCommands(robots, id, commands) {
-  const normalizedCommands = commands.map((command) => command.toUpperCase())
-  if (!normalizedCommands.every((command) => VALID_COMMANDS.has(command))) {
-    return robots
+// Such as "QUEUE R1 MOVE GOTO 1,2 LEFT".
+function queueScenarioCommands(robots, id, commandText) {
+  const tokens = commandText.trim().split(/\s+/)
+  const commands = []
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const command = tokens[index].toUpperCase()
+    if (command === 'GOTO') {
+      const targetMatch = tokens[index + 1]?.match(/^(\d+)\s*,\s*(\d+)$/)
+      if (!targetMatch) {
+        return robots
+      }
+      commands.push({
+        type: 'GOTO',
+        target: { x: Number(targetMatch[1]), y: Number(targetMatch[2]) },
+      })
+      index += 1
+    } else if (VALID_COMMANDS.has(command)) {
+      commands.push(command)
+    } else {
+      return robots
+    }
   }
 
   let nextRobots = robots
   try {
     // Use the shared world helper so queue behavior matches the API.
-    for (const command of normalizedCommands) {
-      nextRobots = queueRobotCommand(nextRobots, id.toUpperCase(), command)
+    for (const command of commands) {
+      nextRobots =
+        typeof command === 'string'
+          ? queueRobotCommand(nextRobots, id.toUpperCase(), command)
+          : queueRobotGoto(nextRobots, id.toUpperCase(), command.target)
     }
   } catch (error) {
     // Unknown robot IDs make this scenario command a no-op.
@@ -136,13 +161,13 @@ export function runScenario(input) {
       continue
     }
 
-    // QUEUE accepts one or more commands for a robot that has already been placed.
+    // QUEUE accepts normal commands and GOTO X,Y for an already placed robot.
     const queueCommand = line.match(/^QUEUE\s+(R[1-9]\d*)\s+(.+)$/i)
     if (queueCommand) {
       robots = queueScenarioCommands(
         robots,
         queueCommand[1],
-        queueCommand[2].trim().split(/\s+/),
+        queueCommand[2],
       )
       continue
     }

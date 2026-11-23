@@ -5,8 +5,10 @@ import { createFloor } from './floor.js'
 import { createRobot } from './robot.js'
 import {
   advanceTick,
+  findShortestPath,
   placeRobot,
   queueRobotCommand,
+  queueRobotGoto,
 } from './world.js'
 
 test('placeRobot creates a north-facing robot with the next free ID', () => {
@@ -71,6 +73,182 @@ test('queueRobotCommand rejects unknown robots and unsupported commands', () => 
     () => queueRobotCommand(robots, 'R1', 'UP'),
     /must be MOVE, LEFT, or RIGHT/,
   )
+})
+
+test('findShortestPath prefers NORTH, EAST, SOUTH, then WEST for tied routes', () => {
+  const floor = createFloor(3, 3)
+  const robot = createRobot('R1', { x: 0, y: 0 })
+
+  assert.deepEqual(
+    findShortestPath(floor, [robot], robot, { x: 1, y: 1 }),
+    [
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+    ],
+  )
+})
+
+test('findShortestPath routes around obstacles and treats other robots as walls', () => {
+  const floor = {
+    ...createFloor(3, 3),
+    obstacles: [{ x: 1, y: 0 }],
+  }
+  const robot = createRobot('R1', { x: 0, y: 0 })
+  const blocker = createRobot('R2', { x: 1, y: 1 })
+
+  assert.deepEqual(
+    findShortestPath(floor, [robot, blocker], robot, { x: 2, y: 0 }),
+    [
+      { x: 0, y: 1 },
+      { x: 0, y: 2 },
+      { x: 1, y: 2 },
+      { x: 2, y: 2 },
+      { x: 2, y: 1 },
+      { x: 2, y: 0 },
+    ],
+  )
+  assert.equal(
+    findShortestPath(floor, [robot], robot, { x: 1, y: 0 }),
+    null,
+  )
+})
+
+test('queueRobotGoto appends a persistent target command', () => {
+  const robots = [createRobot('R1', { x: 0, y: 0 })]
+
+  const updatedRobots = queueRobotGoto(robots, 'R1', { x: 2, y: 1 })
+
+  assert.deepEqual(updatedRobots[0].queue, [
+    { type: 'GOTO', target: { x: 2, y: 1 }, noPathTicks: 0 },
+  ])
+  assert.deepEqual(robots[0].queue, [])
+})
+
+test('GOTO turns toward and follows the shortest path, then leaves the queue on arrival', () => {
+  const floor = createFloor(3, 2)
+  let robots = [
+    {
+      ...createRobot('R1', { x: 0, y: 0 }, 'EAST'),
+      queue: [
+        { type: 'GOTO', target: { x: 2, y: 1 }, noPathTicks: 0 },
+      ],
+    },
+  ]
+
+  const firstTick = advanceTick(floor, robots)
+  robots = firstTick.robots
+  assert.deepEqual(robots[0].position, { x: 0, y: 1 })
+  assert.equal(robots[0].facing, 'NORTH')
+  assert.equal(robots[0].queue[0].type, 'GOTO')
+
+  const results = [firstTick.results[0]]
+  for (let tick = 0; tick < 2; tick += 1) {
+    const result = advanceTick(floor, robots)
+    robots = result.robots
+    results.push(result.results[0])
+  }
+
+  assert.deepEqual(robots[0].position, { x: 2, y: 1 })
+  assert.deepEqual(robots[0].queue, [])
+  assert.deepEqual(results.map((result) => result.action), [
+    'moved',
+    'moved',
+    'moved',
+  ])
+})
+
+test('GOTO waits when blocked by another robot, then continues when it moves away', () => {
+  const floor = createFloor(2, 2)
+  let robots = [
+    {
+      ...createRobot('R1', { x: 0, y: 0 }, 'EAST'),
+      queue: [
+        { type: 'GOTO', target: { x: 1, y: 0 }, noPathTicks: 0 },
+      ],
+    },
+    { ...createRobot('R2', { x: 1, y: 0 }, 'NORTH'), queue: ['MOVE'] },
+  ]
+
+  const firstTick = advanceTick(floor, robots)
+  robots = firstTick.robots
+  assert.equal(firstTick.results[0].action, 'waiting')
+  assert.equal(robots[0].queue[0].noPathTicks, 1)
+
+  const secondTick = advanceTick(floor, robots)
+  robots = secondTick.robots
+  assert.equal(secondTick.results[0].action, 'moved')
+  assert.deepEqual(robots[0].position, { x: 1, y: 0 })
+  assert.deepEqual(robots[0].queue, [])
+})
+
+test('competing GOTO moves use the normal contested-cell priority', () => {
+  const floor = createFloor(3, 1)
+  let robots = [
+    {
+      ...createRobot('R2', { x: 2, y: 0 }, 'WEST'),
+      queue: [
+        { type: 'GOTO', target: { x: 1, y: 0 }, noPathTicks: 0 },
+      ],
+    },
+    {
+      ...createRobot('R1', { x: 0, y: 0 }, 'EAST'),
+      queue: [
+        { type: 'GOTO', target: { x: 1, y: 0 }, noPathTicks: 0 },
+      ],
+    },
+  ]
+
+  const result = advanceTick(floor, robots)
+  robots = result.robots
+
+  assert.deepEqual(robots.map((robot) => robot.position), [
+    { x: 2, y: 0 },
+    { x: 1, y: 0 },
+  ])
+  assert.deepEqual(
+    result.results.map(({ robotId, action, reason }) => [
+      robotId,
+      action,
+      reason,
+    ]),
+    [
+      ['R2', 'blocked', 'CONTESTED'],
+      ['R1', 'moved', undefined],
+    ],
+  )
+  assert.equal(robots[0].queue[0].type, 'GOTO')
+  assert.equal(robots[0].queue[0].noPathTicks, 0)
+})
+
+test('GOTO logs UNREACHABLE and drops after three consecutive no-path ticks', () => {
+  const floor = {
+    ...createFloor(3, 1),
+    obstacles: [{ x: 1, y: 0 }],
+  }
+  let robot = {
+    ...createRobot('R1', { x: 0, y: 0 }),
+    queue: [
+      { type: 'GOTO', target: { x: 2, y: 0 }, noPathTicks: 0 },
+      'LEFT',
+    ],
+  }
+  const actions = []
+
+  for (let tick = 0; tick < 3; tick += 1) {
+    const result = advanceTick(floor, [robot])
+    robot = result.robots[0]
+    actions.push(result.results[0])
+  }
+
+  assert.deepEqual(
+    actions.map(({ action, reason }) => [action, reason]),
+    [
+      ['waiting', 'NO_PATH'],
+      ['waiting', 'NO_PATH'],
+      ['unreachable', 'UNREACHABLE'],
+    ],
+  )
+  assert.deepEqual(robot.queue, ['LEFT'])
 })
 
 test('advanceTick turns robots in place and leaves idle robots unchanged', () => {

@@ -13,6 +13,7 @@ interface PositionBody {
 
 interface CommandBody {
   command?: unknown
+  target?: PositionBody
 }
 
 @Controller('api/world')
@@ -44,7 +45,11 @@ export class WorldController {
     @Param('robotId') robotId: string,
     @Body() body?: CommandBody,
   ) {
-    return this.worldService.queueCommand(robotId, body?.command)
+    return this.worldService.queueCommand(
+      robotId,
+      body?.command,
+      body?.target,
+    )
   }
 
   @Post('obstacles')
